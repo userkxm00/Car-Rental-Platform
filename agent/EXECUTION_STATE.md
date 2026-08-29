@@ -9,23 +9,45 @@ This file is the persistent checkpoint for autonomous implementation.
 - Current task: `TASK-01-01`
 - Last completed task: none
 - Last completed phase: `PHASE-00`
+- Current attempt: `0`
+- Last validation: `repository documentation audit`
+- Last known good commit: `062d2f6f9f2b09f643c36e6a601da0236037690f`
 - Blocker: none
+- Next action: execute TASK-01-01
+- Last updated: 2026-08-29
 
-## Rules
+## State transition rules
 
-- Update this file after every task and phase gate.
-- Status values: `READY`, `IN_PROGRESS`, `DONE`, `BLOCKED — HUMAN DECISION REQUIRED`, `BLOCKED — ENGINEERING`.
+- `READY_TO_START` → `IN_PROGRESS` when work begins.
+- `IN_PROGRESS` → `VALIDATING` after implementation.
+- `VALIDATING` → `DONE` only when acceptance criteria and required evidence pass.
+- A failed normal validation returns to `IN_PROGRESS` for repair.
+- Repeated unresolved technical failure becomes `BLOCKED — ENGINEERING` with reproduction evidence.
+- An unresolved product/legal/security/irreversible decision becomes `BLOCKED — HUMAN DECISION REQUIRED`.
 - Never move to the next task unless the current task is `DONE`.
-- Never move to the next phase unless its gate is `PASSED`.
+- Never move to the next phase unless all phase tasks are `DONE` and its gate is `PASSED`.
 
 ## Current execution pointer
 
-See `agent/tasks/` for task definitions. Execute tasks in numeric order unless a task declares an explicit dependency.
+Canonical phase/task specifications live under `agent/tasks/PHASE-NN.md`. `agent/TASK_REGISTRY.md` is the ordered index. Do not invent a different sequence.
 
-## Evidence pointer
+## Required checkpoint data after every task
 
-Completed-task evidence is recorded in each task file and summarized in `agent/EVIDENCE_LOG.md`.
+Record:
+- task status
+- start/completion time
+- attempt number
+- files changed
+- validation commands/results
+- security/tenant checks
+- migration/API/UI evidence when relevant
+- commit SHA if committed
+- next task
 
-## Last checkpoint
+## Resume rule
 
-No implementation task has started yet.
+A new agent/session must read this file first and resume from the current pointer. Never restart a completed task unless regression evidence requires it.
+
+## Phase 00
+
+Architecture baseline is frozen for Release 1. Provider selections that are implementation-specific are resolved behind approved abstractions in the relevant phase/task; they are not permission to change the frozen architecture.
