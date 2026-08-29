@@ -1,60 +1,72 @@
-# Architecture Freeze — Readiness Gate
+# Architecture Freeze — Release 1 Baseline
 
-## Current status
+## Status
 
-**NOT FROZEN — final review required before implementation.**
+**FROZEN — Release 1 Core Architecture**
 
-## Completed baseline
+This file is the single authoritative freeze-status document. Product/business details live under `docs/`; architecture decisions live under `architecture/`; execution state lives under `agent/`.
 
-- product surfaces and Release 1 scope
-- Customer Web as Release 1 customer experience
-- Agency Operations Mobile as Release 1 native app
-- Owner/Admin Web
-- Platform Owner Web control center
-- future Customer App deferred to Release 2+
-- modular monolith direction
-- PostgreSQL + PostGIS decision
-- Prisma data-access direction
-- NestJS + TypeScript backend direction
-- tenant model
-- role/permission model
-- business rules foundation
-- booking/availability/pricing domain boundaries
-- map/location model
-- licensing/entitlement architecture
-- mobile distribution strategy
-- security threat model
-- API/error model
-- infrastructure/deployment baseline
-- testing/quality gates
-- architecture ADRs
+## What is frozen
 
-## Freeze blockers
+- Product model: Agency SaaS + Customer Marketplace + Platform Control Plane.
+- Release 1 client surfaces: Customer Web, Agency Web, Agency Operations Mobile, Platform Owner Web.
+- Customer Mobile App is Release 2+.
+- TypeScript + NestJS modular monolith.
+- PostgreSQL + PostGIS + Prisma with isolated SQL paths where PostGIS-specific behavior requires them.
+- Versioned REST API `/api/v1` + OpenAPI.
+- Provider-neutral auth, storage, maps/geocoding, messaging and payment adapters.
+- Explicit multi-tenant isolation and RBAC/permission/resource scope.
+- Server-authoritative availability, booking, pricing and financial truth.
+- Hybrid monetization architecture: Free + Trial + Subscription + License Key + Manual Renewal + optional Marketplace Commission + optional Google Ads, with independent activation.
+- Arabic/French/English + RTL + DZD baseline.
+- First-class map/list marketplace discovery.
+- Pickup/return inspection, damage evidence and maintenance/readiness workflows.
+- Security, auditability, idempotency, testing and observability requirements.
 
-The following must be reviewed and accepted before coding the production schema/application foundation:
+## Provider decisions
 
-1. Final physical database schema and relationship review.
-2. Exact vehicle/category reservation model.
-3. Final booking state machine and cancellation/no-show policy matrix.
-4. Final availability interval/conflict strategy, including PostgreSQL exclusion/locking approach.
-5. Final pricing calculation specification and rounding/currency policy.
-6. Concrete authentication provider selection.
-7. Final permission catalog and privileged-action policy.
-8. Map provider selection for initial release and geocoding/autocomplete/routing adapters.
-9. Object storage provider and document retention policy.
-10. Payment provider roadmap for Algeria/Maghreb and manual reconciliation workflow.
-11. API resource/command catalog and OpenAPI generation strategy.
-12. Final observability and backup/RPO/RTO targets.
-13. Complete critical-path test matrix.
+Provider selection is an implementation-level decision behind approved abstractions, not a reason to change the frozen domain architecture. The executing phase must select and record concrete providers before the first task that requires them.
 
-## Freeze rule
+Required examples:
+- Identity provider for Phase 01.
+- Managed PostgreSQL hosting for deployment work.
+- Object storage provider before production media/document work.
+- Initial map/geocoding provider before production map integration.
+- Payment provider only when its task is reached; Release 1 must work without online customer checkout.
 
-No implementation task may silently change one of the above. A changed decision requires a documented ADR/update before implementation proceeds.
+A provider choice must be recorded in an ADR or implementation decision note when it creates material operational or security consequences.
 
-## Implementation gate
+## Freeze does NOT mean
 
-When all blockers are accepted:
+- Every future feature is implemented now.
+- Every provider is permanently fixed forever.
+- A UI cannot evolve.
+- A new feature cannot be added.
 
-`Architecture Status → FROZEN FOR RELEASE 1`
+It means the core architecture cannot be silently replaced or contradicted.
 
-Then the team may create the initial monorepo, configuration, NestJS API, Prisma schema/migrations, web/mobile shells, CI, and Phase 01 identity implementation according to the approved documents.
+## Change policy
+
+A material change to database technology, tenancy, identity architecture, authorization model, booking/availability invariants, API contract strategy, monetary source of truth, storage/security model, deployment topology, or client responsibilities requires:
+
+1. written problem statement;
+2. impact analysis;
+3. ADR/update;
+4. documentation synchronization;
+5. only then implementation.
+
+Normal feature work that stays inside the frozen architecture does not require a new ADR.
+
+## Freeze gate result
+
+All previously listed pre-freeze concerns have been converted into either:
+- frozen architecture rules;
+- phase/task implementation decisions behind an abstraction;
+- Release 1 acceptance criteria;
+- or documented future scope.
+
+Therefore the repository is authorized to begin **Phase 01 — Identity & Access**.
+
+## Next phase
+
+`PHASE-01` / `TASK-01-01`
