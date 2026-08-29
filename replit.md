@@ -2,18 +2,16 @@
 
 ## Mission
 
-Build a production-grade multi-tenant SaaS platform for car-rental businesses. The platform must improve both sides of the rental operation: agency owners/staff get operational control, financial visibility, fleet intelligence, and automation; customers get a fast, trustworthy booking and rental experience through web and mobile.
+Build a production-grade multi-tenant SaaS platform for car-rental businesses, initially optimized for Algeria and adaptable to North Africa and international markets. The platform must improve both sides of the rental operation: agency owners/staff get operational control, financial visibility, fleet intelligence, automation and mobile field tools; customers get a fast, trustworthy multilingual booking and rental experience through the web.
 
-## Product surfaces
+## Release 1 product surfaces
 
-1. Customer Web
-2. Customer Mobile App — consumer/renter experience
-3. Owner/Admin Web — agency administration and complex configuration
-4. Operations Mobile App — staff workflows and owner/manager companion capabilities
-5. Platform Owner Control Center Web — SaaS administration, plans, licenses, entitlements, feature flags, support, and platform health
-6. Shared backend API and domain services
+1. Customer Web — public booking and self-service; responsive/mobile-first.
+2. Agency Operations Mobile App — one native mobile app for agency staff and authorized agency owners/managers.
+3. Agency Owner/Admin Web — full management and configuration.
+4. Platform Owner Control Center Web — SaaS plans, licenses, entitlements, support and platform administration.
 
-Read `docs/34-app-surface-and-role-strategy.md` before making any role-specific mobile or admin decision.
+Customer Mobile App is deliberately deferred to a later release. It must reuse the same backend APIs and domain services when introduced.
 
 ## Core domains
 
@@ -35,7 +33,7 @@ Read `docs/34-app-surface-and-role-strategy.md` before making any role-specific 
 - Analytics and reporting
 - AI-assisted operational intelligence
 - Audit logs
-- SaaS plans, subscriptions, licenses, entitlements, and feature flags
+- SaaS subscriptions, plans, license keys, entitlements and feature flags
 
 ## Non-negotiable engineering rules
 
@@ -52,9 +50,7 @@ Read `docs/34-app-surface-and-role-strategy.md` before making any role-specific 
 - Do not make broad rewrites when a focused change is sufficient.
 - Do not silently alter an accepted architecture decision; create/update an ADR.
 - Critical workflows require automated tests before being considered complete.
-- Never use a raw license key, plan name, or UI feature flag as the sole authorization mechanism; use server-side entitlement decisions.
-- Do not expose platform-owner controls to agency users.
-- Do not put complex agency administration inside the consumer mobile app.
+- Do not implement customer mobile in Release 1 unless the project owner explicitly changes the roadmap and documentation.
 
 ## Agent workflow
 
@@ -76,8 +72,7 @@ Before a major implementation:
 Reference projects are for learning patterns, workflows, architecture ideas, and UX concepts. Do not blindly clone their implementation, schema, wording, branding, or UI. Prefer understanding the underlying problem and implementing a cleaner solution consistent with this repository's specification.
 
 Primary reference: `aelassas/bookcars`.
-Secondary references: `Mohamed-Galdi/real-rent-car`, `Abdellatif404/Car-Rental-Website`, `Brownie-08/Updated-Car-Rental`.
-Regional reference: `abdelmoughit555/rental-car` (Autorockin), especially for multilingual/map/address UX.
+Secondary references: `Mohamed-Galdi/real-rent-car`, `Abdellatif404/Car-Rental-Website`, `Brownie-08/Updated-Car-Rental`, plus regionally relevant references documented in `references/`.
 
 ## Critical domain concepts
 
@@ -99,19 +94,20 @@ Pickup and return inspections are first-class workflows. Record mileage, fuel, c
 ### Multi-tenancy
 The architecture must support multiple agencies and multiple branches while preventing cross-tenant access. Tenant ownership and authorization must be explicit in data access and APIs.
 
-### Maps and locations
-Map/location is a first-class capability. Support map/list search, branch/parking/pickup points, airport/hotel/custom pickup where configured, address autocomplete, delivery zones, distance-aware fees where appropriate, and provider abstraction. Never expose exact live vehicle/customer locations by default.
-
 ### SaaS entitlements
-Agency access is controlled through server-side subscription/entitlement state. Trial, paid plans, license grants, manual overrides, limits, feature entitlements, revocation, and grace periods must be auditable and tenant-scoped.
+Plans, trials, subscriptions, license keys and feature flags are platform-level controls. Raw license keys are never authorization checks. Effective entitlements are computed server-side and exposed through a single entitlement/authorization layer.
 
 ## Localization baseline
 
-The initial product must support Arabic, French, and English, with DZD as a primary market currency and an architecture that can support additional currencies/languages later. RTL must be treated as a first-class UI requirement. Customer-facing and operational terminology must be translatable; business values and stored enums must not depend on translated text.
+The initial product must support Arabic, French, and English, with DZD as a primary market currency and an architecture that can support additional currencies/languages later. RTL must be treated as a first-class UI requirement.
 
-## Mobile strategy
+## Map/location baseline
 
-Use purpose-built mobile surfaces: Customer App for renters and Operations App for agency staff/owners. They share backend/domain logic but do not share role permissions or navigation indiscriminately. Platform Owner administration is web-first.
+The map is a first-class product capability. Customer web must support map/list search for branches, pickup locations and enabled locations. Owner web must manage coordinates, parking, delivery zones, hours and location-specific rules. PostGIS should back geospatial querying when the final architecture is approved. Never expose exact live vehicle/customer locations publicly by default.
+
+## Mobile baseline
+
+Release 1 mobile is the Agency Operations App. It should optimize for pickup/return operations, QR, camera, inspections, photos, location, notifications and task workflows. Customer mobile is later and must be an additional client of the existing backend.
 
 ## Product philosophy
 
