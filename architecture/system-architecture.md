@@ -1,73 +1,201 @@
-# System Architecture — Preliminary Design
+# System Architecture
 
-This is a pre-implementation architecture baseline. Technology choices must be finalized only after the full requirements, constraints and Replit environment are assessed.
+## Status
+Proposed for Phase 00. Implementation must not begin until the architecture review gate is accepted.
 
-## Architectural shape
+## Objective
+Build a production-grade multi-tenant car-rental SaaS platform using a modular monolith backend and purpose-built clients. Prefer well-understood boundaries over premature microservices.
 
-Prefer a modular monorepo with a shared authoritative backend/domain layer and separate customer web, owner/admin web, and mobile experiences.
+## High-level topology
 
-Conceptual topology:
+```text
+Customer Web ───────┐
+Agency Operations ──┼──> NestJS API / Domain Layer
+Owner/Admin Web ────┘             │
+                                  ├── PostgreSQL + PostGIS
+                                  ├── Object Storage
+                                  ├── Redis/Queue (when justified)
+                                  └── External provider adapters
 
-Customer Web ─┐
-Customer Mobile ─┼──> API / Domain Services ──> PostgreSQL
-Owner/Admin Web ─┤             │
-Staff Mobile ────┘             ├──> Object Storage
-                              ├──> Job/Queue infrastructure
-                              ├──> Notifications providers
-                              ├──> Payment providers
-                              └──> Map/geocoding providers
+Platform Owner Web ─────────────> Platform Admin modules
 
-## Core architectural principles
+Future Customer App ────────────> Same API/domain layer
+```
 
-- API/domain layer is the source of truth.
-- Business rules live in domain/services, not duplicated in clients.
-- Tenant isolation is enforced in every access path.
-- Financial and historical records are append-oriented/auditable.
-- Integrations are adapter-based.
-- Background work handles non-critical side effects.
-- Observability is part of production architecture.
-- Critical domains have automated tests.
+## Architectural style
 
-## Domain boundaries
+Use a **modular monolith** initially.
 
-- Identity & Access.
-- Organizations/Tenants.
-- Locations & Branches.
-- Fleet.
-- Availability.
-- Bookings.
-- Pricing.
-- Customers.
-- Contracts/Documents.
-- Inspections/Damage.
-- Maintenance/Readiness.
-- Payments/Billing.
-- Notifications.
-- Tasks/Operations.
-- Partners/Loyalty/Referral.
-- Analytics.
-- AI.
+The backend has strong domain/module boundaries but is deployed as one service unless operational evidence later justifies extraction.
 
-## Integration boundaries
+Why:
+- simpler deployment and local development
+- fewer network boundaries
+- simpler transactions for booking/payment workflows
+- easier testing
+- easier Replit Agent implementation
+- modules can later be extracted behind explicit contracts
 
-Map provider abstraction must separate geocoding, autocomplete, map rendering, routing and distance calculation.
+## Backend modules
 
-Payment provider abstraction must separate payment intent/authorization, capture, refund, webhook verification and reconciliation.
+- Identity & Access
+- Tenancy & Organizations
+- Branches & Locations
+- Fleet
+- Availability
+- Booking
+- Pricing
+- Customer CRM
+- Contracts & Documents
+- Inspection & Damage
+- Maintenance & Readiness
+- Payments & Billing
+- Notifications
+- Operations Tasks
+- Partners / Referrals / Loyalty
+- Analytics
+- AI Assistance
+- Subscriptions / Licensing / Entitlements
+- Audit / Compliance
+- Platform Administration
 
-Object storage abstraction must support images, documents and generated PDFs without coupling the domain to one vendor.
+## Module layering
 
-## Concurrency-sensitive domains
+```text
+HTTP / Transport
+      ↓
+Application use case
+      ↓
+Domain rules / domain service
+      ↓
+Repository / adapter interface
+      ↓
+Prisma / SQL / external provider
+```
 
-Booking, availability and payments require explicit transaction/concurrency design. The implementation must be tested for race conditions, duplicate submissions and webhook retries.
+Controllers must not own complex business logic.
 
-## Mobile architecture
+## Data authority
 
-Customer and staff apps should share API contracts and domain models where appropriate but should keep role-specific UX flows. Offline support is limited to safe operational context and must never bypass server authority.
+PostgreSQL is the durable source of truth.
 
-## Localization architecture
+The backend is authoritative for:
+- authorization
+- tenant ownership
+- availability
+- pricing
+- booking lifecycle
+- payments
+- documents
+- inspections
+- maintenance state
+- subscriptions and entitlements
 
-Translation keys are centralized. Arabic RTL behavior is implemented at the design-system/layout level. Locale formatting is centralized rather than embedded in individual components.
+Clients are never authoritative for these values.
 
-## Reference lesson
+## API
 
-BookCars demonstrates the value of a monorepo, API-first model, shared TypeScript types and separate customer/admin/mobile surfaces. We adopt the principles while keeping our own domain and implementation. Source: https://github.com/aelassas/bookcars/wiki/Software-Architecture
+Version public APIs from the beginning:
+
+`/api/v1/...`
+
+Use consistent conventions for:
+- resource naming
+- pagination
+- filtering/sorting
+- validation errors
+- authorization errors
+- idempotency
+- request IDs
+- correlation IDs
+
+Maintain OpenAPI documentation from the API contract.
+
+## Transactions and concurrency
+
+Use database transactions for state changes that must be atomic, especially booking creation/extension, payment reconciliation and critical inventory transitions.
+
+Do not hold long transactions across slow external network calls unless explicitly justified.
+
+Booking conflict prevention must account for concurrent requests, duplicate submissions and retries.
+
+## Events and background work
+
+Use events/queues for non-critical side effects:
+- notifications
+- emails
+- reminders
+- report generation
+- document processing
+- AI analysis
+- analytics updates
+
+Transactional business state must be persisted first. Use an outbox/reliable-event pattern where necessary to avoid lost side effects.
+
+## Redis
+
+Optional infrastructure for:
+- short-lived cache
+- rate limiting
+- queue support
+- ephemeral coordination
+
+Never use Redis as durable truth for bookings, payments, contracts or financial history.
+
+## Object storage
+
+Store large files outside PostgreSQL:
+- vehicle photos
+- inspection/damage evidence
+- identity documents
+- contracts
+- receipts
+
+PostgreSQL stores ownership, metadata, checksum and object key. Private objects use authorization-aware/signed access.
+
+## Multi-tenancy
+
+Every tenant-owned resource must have an explicit ownership path. Backend authorization and data-access scoping are mandatory. Database-level defenses such as PostgreSQL RLS may be added where they provide meaningful defense-in-depth.
+
+## Maps
+
+Map infrastructure is adapter-based and separates:
+- geocoding
+- address autocomplete
+- map rendering
+- routing/directions
+- distance calculation
+
+PostGIS is the persistent geospatial layer. Provider-specific place IDs must not become the domain's only location identity.
+
+## Prisma + PostGIS boundary
+
+Prisma is the primary relational data-access layer. PostGIS geographic types and specialized spatial queries are isolated behind a small SQL/adapter boundary because current Prisma ORM support does not provide full native PostGIS field support. Those raw queries must be parameterized, tested and reviewed.
+
+## Deployment
+
+Development:
+- PostgreSQL 18.x + PostGIS
+- object storage development provider/emulator
+- optional Redis
+
+Production:
+- managed PostgreSQL + PostGIS
+- managed object storage
+- Redis only when justified
+- HTTPS
+- automated migrations
+- backups and restore tests
+
+The managed infrastructure provider is an ADR, not a domain dependency.
+
+## Architectural invariants
+
+1. No client owns business truth.
+2. No protected operation bypasses authorization.
+3. No booking operation bypasses availability rules.
+4. No pricing total is trusted from the client.
+5. No tenant query intentionally crosses tenant scope.
+6. Historical facts required for audit are immutable/append-oriented.
+7. External services are behind adapters.
+8. New architectural patterns require an ADR.
