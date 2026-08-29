@@ -1,123 +1,106 @@
 # Reference Audit — BookCars
 
 Repository: https://github.com/aelassas/bookcars
-License: MIT (as stated by the repository README observed during audit)
+License: MIT (as stated by the repository README observed during audit; verify upstream LICENSE before copying code)
 Priority: Primary reference
 
 ## Why it matters
 
-BookCars is a broad car-rental platform reference spanning customer web, admin operations, and a mobile application. The README and architecture documentation expose useful patterns for a production rental product.
+BookCars is a broad cross-platform car-rental platform spanning customer web, admin operations, backend API and mobile. Its documented features include fleet management, time-based availability, vehicle scheduling, dynamic/date-based pricing, payments, hierarchical locations, parking/map search, multilingual/currency support and push notifications.
 
-## Patterns to study and adapt
+Architecture reference:
+https://github.com/aelassas/bookcars/wiki/Software-Architecture
 
-### 1. Multiple product surfaces behind shared backend/domain concepts
+## Architecture patterns to study and adapt
 
-BookCars combines frontend, admin panel, backend, and mobile concerns while sharing common types. This is useful for avoiding divergent rules between web and mobile.
+### Multiple product surfaces behind shared domain rules
 
-Our adaptation:
-- one authoritative backend/domain layer
-- customer web and mobile consume the same business APIs
-- owner/admin and staff experiences use the same domain model
-- shared validation/types where appropriate
+BookCars combines frontend, admin, backend and mobile while sharing common types. We want the same principle so web/mobile do not implement different booking or pricing rules.
 
-### 2. Multi-supplier / supplier management
+### API-first and shared contracts
 
-BookCars can operate with one or multiple suppliers and gives suppliers their own fleet/booking management context.
+Use a single authoritative backend/domain layer. Shared request/response types and validation contracts should reduce drift between customer web, owner web and mobile.
 
-Our adaptation:
-- model agencies/tenants explicitly from day one
-- agency owns branches, vehicles, staff, bookings, customers, pricing, and financial records
-- tenant isolation must be enforced server-side
+### Multi-supplier model
 
-### 3. Vehicle scheduler and time-based availability
+BookCars supports one or multiple suppliers. Our architecture should generalize this into explicit organization/tenant + branch ownership so a single agency deployment can later become a multi-agency SaaS platform without a redesign.
 
-BookCars treats availability as time-based and includes vehicle scheduling and rental-date constraints.
+### Vehicle scheduler and time-based availability
 
-Our adaptation:
-- do not use a single boolean as the source of truth for availability
-- compute conflicts using reservations plus operational blocks
-- include maintenance, inspection, transfer, damage, and manual blocking as availability-affecting events
-- enforce conflict prevention server-side and at the database/transaction layer where appropriate
+Study the scheduler/date constraints. Our implementation must not use a single boolean as the source of truth. Availability is computed from time-bounded reservations and operational blocks.
 
-### 4. Centralized price calculation
+Required blocks include:
+- Reservations/rentals.
+- Maintenance.
+- Inspection/readiness.
+- Damage/accident.
+- Manual blackout.
+- Transfer/repositioning.
 
-BookCars supports hourly/daily/weekly/bi-weekly/monthly rates and date-based rate changes.
+### Centralized price calculation
 
-Our adaptation:
-- dedicated pricing engine
-- duration rules
-- season/date rules
-- weekend/special date rules
-- promotions/discounts
-- extras/fees/deposit
-- server-authoritative final totals
-- price snapshot on booking confirmation
+BookCars supports hourly/daily/weekly/bi-weekly/monthly and date-based rates. Our adaptation adds duration tiers, seasons, weekends/holidays, promotions, extras, deposits/fees, transparent breakdowns and immutable booking price snapshots.
 
-### 5. Locations and parking
+### Locations, parking and map search
 
-BookCars models hierarchical locations and parking spots.
+This is a mandatory area to reproduce conceptually and extend. BookCars explicitly documents hierarchical locations, parking spots, location search and map display.
 
-Our adaptation:
-- country → wilaya → city → branch → pickup/parking zone
-- support branch, airport, hotel, and delivery pickup types
-- map coordinates are supplementary location data, not the only identifier
+Our model should support:
+- Country.
+- Wilaya/region.
+- City/area.
+- Branch.
+- Parking/staging point.
+- Airport pickup point.
+- Hotel pickup point.
+- Delivery zone.
+- Custom meeting point where permitted.
 
-### 6. Notification system
+Customer map UX should support Map/List, nearby results, location filters, address autocomplete through a provider adapter, and safe display of branch/pickup locations.
 
-BookCars includes automated notifications and push notifications.
+### Payments
 
-Our adaptation:
-- centralized event-driven notification system
-- in-app + push first
-- email/SMS/WhatsApp can be added through provider adapters
-- avoid creating duplicate notification logic in each client
+BookCars demonstrates multiple gateways and payment methods. We adopt the abstraction idea, not the provider assumptions. Algeria requires WebMarchand application, technical tests and certification/authorization for online payment integration; see `research/algeria-and-maghreb.md`.
 
-### 7. Authentication and localization
+### Notifications
 
-BookCars supports several login methods and multiple languages/currencies.
+Study automated and push notifications. We will build a central event-driven notification center with channel adapters and user preferences.
 
-Our adaptation:
-- email/phone and optionally social login later
-- Arabic/French/English
-- first-class RTL
-- monetary/currency formatting isolated from business calculations
+### Localization and currencies
 
-### 8. Mobile app from a shared codebase
+BookCars demonstrates multiple languages/currencies. Our baseline is Arabic/French/English with real RTL support and DZD primary market formatting; currency architecture must allow MAD/TND/EUR and more.
 
-BookCars provides Android/iOS mobile capability.
+### Native mobile
 
-Our adaptation:
-- React Native/Expo-oriented architecture where compatible with the selected implementation stack
-- customer and staff workflows optimized for touch/mobile operations
-- do not duplicate business rules inside mobile
+Use the shared-backend principle for Android/iOS customer and staff experiences. Business rules must remain server authoritative.
 
-### 9. Operational observability
+### Quality and observability
 
-BookCars references testing, code coverage, and error/performance monitoring.
+Study the project's testing, coverage, CI and error/performance monitoring practices. Our definition of done includes automated tests and production observability for critical workflows.
 
-Our adaptation:
-- unit/integration/E2E testing
-- structured errors/logging
-- production monitoring
-- CI quality gates
+## Product improvements we make
 
-## Patterns we should improve
+- First-class inspection and damage evidence.
+- Post-return vehicle readiness workflow.
+- Vehicle profitability and operating-cost visibility.
+- Owner attention/exception center.
+- Staff task workflow.
+- Customer My Rental lifecycle.
+- Regional payment/manual reconciliation.
+- Stronger Arabic RTL experience.
+- North-African location types and delivery zones.
+- Data-grounded AI assistance.
 
-- Make damage/inspection a stronger first-class domain.
-- Add immutable financial and rental snapshots where historical truth requires them.
-- Add owner attention center and exception-based workflow.
-- Add vehicle profitability and utilization analytics.
-- Add staff task workflows for pickup/return/preparation.
-- Add customer self-service rental lifecycle actions such as extension and issue reporting.
-- Add AI assist only around measurable operational tasks rather than generic chat.
+## Do not blindly copy
 
-## Patterns we should not blindly copy
-
+- Branding, wording, visual identity or UI layout.
 - Exact database schema.
-- Exact UI/branding.
-- Exact technology choices when they do not fit Replit/project constraints.
-- Any workflow that conflicts with our business rules or Algeria-ready requirements.
+- Exact implementation patterns when our architecture differs.
+- Provider-specific payment assumptions.
+- Any feature without a business rule, permission model or test strategy.
 
-## Primary implementation lesson
+## Source feature inventory
 
-The most valuable BookCars lesson is architectural: availability, pricing, booking, supplier/tenant management, and client applications should be built as coherent domains behind authoritative server-side rules rather than as disconnected CRUD screens.
+The upstream repository documents supplier/fleet management, bookings, vehicle scheduler, dynamic pricing, date/time constraints, payment methods/gateways, hierarchical locations/parking/maps, customer management, multilingual/currency support, responsive web/admin, mobile and push notifications.
+
+Source: https://github.com/aelassas/bookcars
