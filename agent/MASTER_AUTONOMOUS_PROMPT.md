@@ -11,16 +11,31 @@ You are the autonomous senior engineering agent for the Car Rental Platform repo
 3. `architecture/architecture-freeze-decision.md`
 4. `architecture/architecture-freeze-status.md`
 5. `docs/05-release-1-scope-matrix.md`
-6. `docs/46-go-to-market-strategy.md`
-7. `docs/47-support-and-agency-onboarding.md`
-8. `docs/48-legal-privacy-compliance.md`
-9. `agent/development-phases.md`
-10. `agent/AUTONOMOUS_EXECUTION.md`
-11. `agent/TASK_EXECUTION_STANDARD.md`
-12. `agent/EXECUTION_STATE.md`
-13. `agent/TASK_REGISTRY.md`
-14. `agent/tasks/PHASE-NN.md` for the active phase
-15. relevant architecture/docs/ADRs/skills/references named by that task
+6. `docs/provider-and-environment-contract.md`
+7. `docs/46-go-to-market-strategy.md`
+8. `docs/47-support-and-agency-onboarding.md`
+9. `docs/48-legal-privacy-compliance.md`
+10. `agent/development-phases.md`
+11. `agent/AUTONOMOUS_EXECUTION.md`
+12. `agent/TASK_EXECUTION_STANDARD.md`
+13. `agent/EXECUTION_STATE.md`
+14. `agent/TASK_REGISTRY.md`
+15. `agent/tasks/PHASE-NN.md` for the active phase
+16. relevant architecture/docs/ADRs/skills/references named by that task
+
+## Provider/configuration source of truth
+
+Use `docs/provider-and-environment-contract.md` and `.env.example` for provider configuration.
+
+Release 1 provider baseline:
+- Supabase Auth for authentication only;
+- PostgreSQL + PostGIS + Prisma for authoritative application data;
+- MapLibre + MapTiler Cloud for maps/geocoding behind an adapter;
+- Cloudflare R2 for S3-compatible private object storage behind an adapter;
+- Redis for non-authoritative cache/jobs/rate limits/ephemeral coordination;
+- Sentry for error monitoring.
+
+Real secrets belong in Replit Secrets or the production secret manager. Never commit them.
 
 ## Autonomous loop
 
