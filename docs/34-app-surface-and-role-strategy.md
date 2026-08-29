@@ -2,182 +2,177 @@
 
 ## Decision
 
-The platform must not force customers, agency staff/owners, and the platform owner into one mixed mobile application.
+**Release 1 uses one native mobile application for the rental agency. Customer mobile is intentionally deferred.**
 
-We use one shared backend/domain platform with purpose-built product surfaces.
+The first release has three operational product surfaces:
 
-## Product surfaces
+1. Customer Web — public booking and self-service.
+2. Agency Operations App — native mobile app for agency staff and authorized owners/managers.
+3. Agency Owner/Admin Web + Platform Owner Web — full administration surfaces.
 
-### 1. Customer App — public consumer mobile app
+A dedicated Customer Mobile App is planned for a later release and must reuse the same backend/domain services.
 
-Audience:
-- renters/customers
+## 1. Customer Web — Release 1
 
-Primary jobs:
-- discover agencies/vehicles
-- search by dates and pickup/drop-off location
-- map-based search
-- compare vehicles and prices
-- book
-- pay according to configured methods
-- manage documents
-- digital check-in
-- QR pickup
-- view current rental
-- extend rental
-- report an issue/damage
+The customer does not need to install an app to complete the core journey.
+
+Capabilities:
+- multilingual browsing/search
+- map/list vehicle discovery
+- branch/location discovery
+- airport/hotel/custom pickup selection where enabled
+- vehicle details and transparent pricing
+- quote and booking
+- account/profile
+- booking history/status
+- documents
+- payment/status
 - support
-- notifications
-- loyalty/referrals
+- rental lifecycle pages
+- responsive mobile-first experience
 
-Security:
-- customer permissions only
-- never expose agency administration data
-- never trust mobile-calculated totals or availability
+The responsive website must provide a complete first-class mobile browser experience so a customer can book from a phone with no installation requirement.
 
-### 2. Operations App — agency staff + owner companion
+## 2. Agency Operations App — Release 1
 
-Audience:
-- agency employees
-- branch managers
-- agency owners
+One native iOS/Android app for agency employees and authorized agency owners/managers.
 
-The app uses role-based capabilities rather than creating an entirely separate application for each agency role.
-
-Staff mode:
-- daily tasks
-- pickup/return workflow
+### Staff mode
+- today's pickups and returns
 - QR booking lookup
-- identity/document verification
-- vehicle inspection
-- photos
-- mileage/fuel capture
+- customer/document verification
+- pickup checklist
+- return checklist
+- mileage and fuel capture
+- inspection and photos
 - damage reporting
-- readiness/preparation
+- vehicle readiness/preparation
+- task status
 - issue escalation
+- notifications
+- navigation to pickup/drop-off location
 
-Owner/manager mode:
-- operational alerts
-- today's pickups/returns
+### Owner/manager mode
+The owner/manager can use the same app with role-based access to a focused set of high-value mobile operations:
+- today's operations
+- urgent alerts
 - fleet snapshot
 - booking overview
 - customer lookup
-- revenue snapshot
-- approval actions where permitted
+- basic revenue snapshot
 - branch overview
-- urgent maintenance/vehicle issues
+- maintenance/vehicle alerts
+- approvals where permitted
 
-Complex administration remains on the responsive Owner/Admin Web surface, where tables, reporting, configuration, pricing rules, staff management, documents, billing, and multi-branch operations are easier to operate safely.
+The mobile app is intentionally **not** a full replacement for the web admin dashboard.
 
-### 3. Platform Owner Control Center — web first
+## 3. Agency Owner/Admin Web — Release 1
 
-Audience:
-- the operator/owner of the SaaS platform itself
+Primary full-control surface for each agency.
 
-Responsibilities:
+Capabilities:
+- dashboard and attention center
+- bookings and calendar
+- fleet
+- pricing
+- customers
+- contracts/documents
+- inspection/damage
+- maintenance
+- payments/billing
+- staff and permissions
+- branches and locations
+- map/parking/delivery-zone management
+- partners/referrals
+- analytics
+- settings
+
+## 4. Platform Owner Control Center — Release 1
+
+Private web-only surface for the SaaS operator.
+
+Capabilities:
 - agencies/tenants
 - subscriptions/plans
 - trials
-- licenses
+- license keys
 - entitlements
 - feature flags
 - billing control
-- platform support
-- abuse/security actions
-- platform health
+- support
+- suspension/reactivation
 - global configuration
+- platform health
+- security/audit oversight
 
-No consumer-facing platform-admin controls should be exposed to agency users.
+A private platform-admin mobile companion may be considered later but is not required for the initial product.
 
-A private platform-admin mobile companion may be added later, but is not an MVP requirement.
+## 5. Customer Mobile App — Release 2+
 
-## Why this separation is preferred
+A dedicated Customer App is intentionally postponed until the following are stable:
+- customer web conversion flow
+- booking engine
+- payment flows
+- operations app
+- notifications
+- backend compatibility/versioning
+- real-world operational validation
 
-1. Customer UX stays simple and conversion-focused.
-2. Operational workflows can optimize for camera, QR, GPS, checklists, and fast touch interactions.
-3. Agency administration remains powerful without overwhelming a phone UI.
-4. Platform administration stays isolated from agency tenants.
-5. Authorization boundaries are easier to reason about and test.
-6. Shared backend/domain rules prevent web/mobile divergence without forcing shared UI.
+Planned capabilities:
+- account/profile
+- map/search
+- vehicle details
+- booking
+- payment/status
+- digital check-in
+- QR pickup
+- My Rental
+- extension request
+- issue reporting
+- support
+- push notifications
+- loyalty/referrals
+
+The customer app must be an additional client of the existing backend, not a second implementation of business logic.
 
 ## Shared backend principle
 
-All surfaces consume the same authoritative backend and domain services.
-
-Shared:
-- identity
-- authorization
+All product surfaces consume one authoritative backend/domain layer for:
+- identity and authorization
 - tenant isolation
-- availability
+- vehicle availability
 - pricing
 - booking lifecycle
 - payments
-- notifications
-- documents
+- contracts/documents
 - inspection/damage
-- audit logs
+- notifications
+- audit logging
+- SaaS entitlements
 
-Not shared:
-- role-specific navigation
-- screen layouts
-- operational shortcuts
-- sensitive platform-owner controls
+No client is authoritative for business-critical truth.
 
-## Mobile release strategy
+## Release and distribution strategy
 
-Customer App and Operations App may use the same technical mobile monorepo/codebase when practical, but they must have explicit app identities, navigation boundaries, permission sets, and release channels.
+Release 1 Operations App:
+- Android APK may be distributed from the official website during private/beta stages.
+- Google Play publication follows production readiness.
+- iOS uses TestFlight/App Store distribution when ready.
 
-Preferred production outcome:
-- one customer app listing
-- one agency operations app listing when the staff/owner mobile surface is mature enough
-- one responsive platform-admin web control center
+Customer App distribution begins only when Release 2 is approved.
 
-## Account-role transitions
+## Why this is the chosen model
 
-A person may hold multiple roles, for example:
-- customer account
-- agency staff membership
-- agency owner/manager membership
-
-The backend must evaluate role + tenant + permissions explicitly.
-
-Never infer privileged access only from email ownership or from a client-selected role.
-
-## Platform owner vs agency owner
-
-These are different security domains:
-
-Platform Owner:
-- controls the SaaS platform
-- can manage agencies and entitlements according to platform policy
-
-Agency Owner:
-- controls one agency/tenant
-- can manage their own branches, fleet, staff, bookings, customers, pricing, and financial records according to plan/permissions
-
-Agency Owner must never become Platform Owner merely by being an agency administrator.
-
-## Maps in each app
-
-Customer App:
-- map/list search
-- pickup/drop-off locations
-- branch and parking pins
-- directions
-
-Operations App:
-- pickup/drop-off navigation
-- branch/vehicle context
-- optional location capture subject to permission
-
-Owner/Admin Web:
-- branch and parking management
-- service/delivery zones
-- location analytics
-
-Platform Admin Web:
-- no routine access to exact customer/vehicle locations unless explicitly justified, permissioned, and audited.
+- Customers get frictionless booking without requiring an installation.
+- Agency staff get a native workflow optimized for camera, QR, GPS/location, photos, and checklists.
+- Owners get fast mobile visibility while retaining the full web dashboard for complex administration.
+- Platform administration remains isolated from agency users.
+- The future Customer App becomes a client addition instead of an architectural rewrite.
 
 ## Non-negotiable rule
 
-One backend, multiple purpose-built surfaces. Do not solve role complexity by giving every role every screen inside one universal app.
+**Release 1: one agency operations mobile app + customer web.**
+
+**Later: customer mobile app using the same backend.**
+
+Do not introduce separate customer and agency business logic implementations.
