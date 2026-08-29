@@ -2,108 +2,102 @@
 
 ## Purpose
 
-This repository is designed for autonomous implementation by a coding agent. The human owner should not need to manually orchestrate normal task-to-task progress.
+This repository is designed for autonomous implementation by a coding agent. The human owner should not need to manually orchestrate normal task-to-task or phase-to-phase progress.
 
 ## Execution hierarchy
 
 ```text
 Master Roadmap
   -> Phase
-      -> Task
-          -> Implementation
-          -> Validation
+      -> Task specification
+          -> Ready check
+          -> Load Skills
+          -> Inspect
+          -> Implement
+          -> Validate
+          -> Review
           -> Evidence
-          -> Task completion
+          -> DONE
       -> Phase Gate
   -> Next Phase
 ```
 
+## Canonical execution files
+
+- `agent/MASTER_AUTONOMOUS_PROMPT.md` — one-time agent instruction.
+- `agent/EXECUTION_STATE.md` — persistent checkpoint/resume pointer.
+- `agent/TASK_REGISTRY.md` — canonical ordered list of 19 phases / 95 tasks.
+- `agent/tasks/PHASE-NN.md` — canonical five-task specification for each phase.
+- `agent/EVIDENCE_LOG.md` — durable checkpoint evidence.
+- `agent/TASK_EXECUTION_STANDARD.md` — task Ready/Done/evidence standard.
+
 ## Required behavior
 
 1. Read the source-of-truth hierarchy before changing code.
-2. Read the current execution state.
-3. Select the first unblocked task in the current phase.
-4. Read that task file completely.
-5. Load only the relevant project skills.
-6. Inspect the existing implementation before editing.
-7. Implement the task completely; do not stop after scaffolding.
-8. Run focused tests, typecheck/lint/build as applicable.
-9. Perform the task-specific acceptance checks.
-10. Record evidence, files changed, validation results and status in the task file and execution state.
-11. Mark the task `DONE` only when its Definition of Done is satisfied.
-12. Immediately continue to the next unblocked task.
-13. When every task in a phase is done, run the phase gate.
-14. Advance to the next phase only when the phase gate passes.
-15. Never silently skip a task, weaken an acceptance criterion, or mark work done without evidence.
+2. Read `EXECUTION_STATE.md`.
+3. Select the first uncompleted task in the active phase.
+4. Read `agent/tasks/PHASE-NN.md` and the exact task section completely.
+5. Confirm Definition of Ready and dependencies.
+6. Load only relevant project skills.
+7. Inspect the existing implementation before editing.
+8. Implement the task completely; do not stop at scaffolding.
+9. Run focused tests and required typecheck/lint/build/migration/runtime checks.
+10. Repair normal failures and rerun validation.
+11. Perform task acceptance, security and tenant checks.
+12. Record evidence and checkpoint state.
+13. Mark the task `DONE` only when its Definition of Done is satisfied.
+14. Immediately continue to the next eligible task.
+15. Run the phase gate after all five tasks are DONE.
+16. Advance only when the phase gate passes.
+17. Continue autonomously.
 
-## Autonomous continuation
+## No routine confirmation
 
-Do not ask the user for confirmation between normal tasks or phases. Continue autonomously.
+Do not ask the user for confirmation between normal tasks, tests, documentation updates or phase transitions.
 
-Stop and mark `BLOCKED — HUMAN DECISION REQUIRED` only when:
+## Human decision conditions
 
-- an unresolved product/business/regulatory/legal decision is required;
-- an architecture change conflicts with a frozen ADR;
-- a required external account/credential cannot be safely provisioned by the agent;
-- a destructive irreversible production action is required;
-- or the task cannot be completed without violating a security or data-integrity rule.
+Stop only for:
+- unresolved product/business/legal/regulatory ambiguity that cannot be safely inferred;
+- material architecture change conflicting with a frozen ADR;
+- missing external credentials/accounts required for the task and no safe local boundary exists;
+- irreversible/destructive production action;
+- security or data-integrity issue that cannot be safely resolved within the task.
 
-When blocked, document the exact decision, evidence, options and recommended choice in the task file and execution state. Do not invent the decision.
+When blocked, write exact reproduction/evidence, affected task, impact, possible options and recommended decision into the phase task record and execution state.
 
 ## Error handling
 
-If a test or validation fails:
-
 ```text
 FAIL
- -> diagnose
+ -> diagnose root cause
  -> fix
- -> rerun focused validation
- -> rerun affected regression suite
- -> continue
+ -> focused validation
+ -> impacted regression suite
+ -> continue when green
 ```
 
-If the same root cause remains after reasonable investigation, mark the task `BLOCKED — ENGINEERING` with reproduction steps and do not claim completion.
+If the same technical root cause remains unresolved after reasonable investigation, mark `BLOCKED — ENGINEERING`. Never bypass tests or weaken requirements to obtain green status.
 
-Do not bypass tests, remove assertions, weaken types, disable security checks, or hide warnings solely to obtain a green build.
-
-## Checkpoints
+## Checkpoint protocol
 
 After each completed task:
-
-- update the task file;
+- update the relevant phase task section with status/evidence;
 - update `agent/EXECUTION_STATE.md`;
-- update relevant docs/ADRs when behavior changes;
-- keep the working tree coherent and buildable;
-- create a focused commit when repository workflow permits.
+- append `agent/EVIDENCE_LOG.md`;
+- update docs/ADR if behavior or architecture changed;
+- create a focused commit when appropriate.
 
-A checkpoint is not the end of the run. Continue automatically.
+A checkpoint is never permission to stop the autonomous run.
 
-## Phase gates
+## Phase gate
 
-Every phase has a gate. A gate must verify:
+Every phase gate must check implementation scope, business rules, database/migrations, authorization/tenant isolation, domain invariants, tests, type/lint/build, critical errors, documentation and security. Release-specific gates may add visual/mobile/performance/recovery checks.
 
-- implementation scope;
-- database/migrations;
-- authorization/tenant isolation;
-- domain invariants;
-- tests;
-- type/lint/build;
-- critical error paths;
-- documentation;
-- security regressions;
-- task evidence.
+## Future scope
 
-Only a passed gate permits phase advancement.
+Future capabilities may be represented by interfaces/adapters when required, but must not be implemented before their scheduled phase/release.
 
-## Future-proof rule
+## Reference and skills policy
 
-Future-phase functionality may be represented by interfaces, adapters, contracts or tests when required by the architecture, but must not be implemented as unapproved feature scope.
-
-## Reference repositories
-
-Audited repositories under `references/` are research only. Read them when a task explicitly maps to them. Do not install or copy a reference repository wholesale.
-
-## Skills
-
-Skills under `/.agents/skills/` are specialized instructions. Use the task's skill hints plus relevant domain/security/testing skills. Do not load every skill for every task.
+Audited references under `references/` are research only. Project Skills under `/.agents/skills/` are specialized instructions. Neither overrides the frozen architecture or product/business rules.
