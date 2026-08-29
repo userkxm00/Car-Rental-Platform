@@ -2,14 +2,14 @@
 
 ## Mission
 
-Build a production-grade multi-tenant SaaS platform for car-rental businesses, initially optimized for Algeria and adaptable to North Africa and international markets. The platform must improve both sides of the rental operation: agency owners/staff get operational control, financial visibility, fleet intelligence, automation and mobile field tools; customers get a fast, trustworthy multilingual booking and rental experience through the web.
+Build a production-grade multi-tenant SaaS platform for car-rental businesses, initially optimized for Algeria and adaptable to North Africa and international markets. The platform combines a rental operating system for agencies with a customer-facing regional marketplace/discovery layer.
 
 ## Release 1 product surfaces
 
-1. Customer Web — public booking and self-service; responsive/mobile-first.
+1. Customer Web — public multilingual marketplace, agency profiles, map/list discovery, booking and self-service; responsive/mobile-first.
 2. Agency Operations Mobile App — one native mobile app for agency staff and authorized agency owners/managers.
 3. Agency Owner/Admin Web — full management and configuration.
-4. Platform Owner Control Center Web — SaaS plans, licenses, entitlements, support and platform administration.
+4. Platform Owner Control Center Web — SaaS plans, licenses, entitlements, marketplace policies, moderation, support and platform administration.
 
 Customer Mobile App is deliberately deferred to a later release. It must reuse the same backend APIs and domain services when introduced.
 
@@ -17,6 +17,7 @@ Customer Mobile App is deliberately deferred to a later release. It must reuse t
 
 - Organizations / tenants
 - Branches and locations
+- Marketplace agencies/profiles/offers
 - Users, roles, permissions
 - Fleet and vehicle categories
 - Vehicle availability and scheduling
@@ -29,6 +30,7 @@ Customer Mobile App is deliberately deferred to a later release. It must reuse t
 - Maintenance
 - Payments, deposits, refunds, billing
 - Notifications
+- Reviews, ratings, moderation and trust signals
 - Partners, referrals, loyalty
 - Analytics and reporting
 - AI-assisted operational intelligence
@@ -51,6 +53,9 @@ Customer Mobile App is deliberately deferred to a later release. It must reuse t
 - Do not silently alter an accepted architecture decision; create/update an ADR.
 - Critical workflows require automated tests before being considered complete.
 - Do not implement customer mobile in Release 1 unless the project owner explicitly changes the roadmap and documentation.
+- Marketplace ranking must not bypass hard availability/policy eligibility rules.
+- Reviews must be linked to eligible experiences and protected by moderation/anti-abuse rules.
+- Agency SaaS billing and customer-to-agency rental money must remain separate financial domains.
 
 ## Agent workflow
 
@@ -72,9 +77,12 @@ Before a major implementation:
 Reference projects are for learning patterns, workflows, architecture ideas, and UX concepts. Do not blindly clone their implementation, schema, wording, branding, or UI. Prefer understanding the underlying problem and implementing a cleaner solution consistent with this repository's specification.
 
 Primary reference: `aelassas/bookcars`.
-Secondary references: `Mohamed-Galdi/real-rent-car`, `Abdellatif404/Car-Rental-Website`, `Brownie-08/Updated-Car-Rental`, plus regionally relevant references documented in `references/`.
+Secondary references: `Mohamed-Galdi/real-rent-car`, `Abdellatif404/Car-Rental-Website`, `Brownie-08/Updated-Car-Rental`, plus regional and marketplace references documented in `references/`.
 
 ## Critical domain concepts
+
+### Marketplace
+Customer discovery is cross-agency. Every result remains explicitly owned/operated by one agency/tenant. Agency profiles expose that agency's own bookable inventory and policies only.
 
 ### Availability
 Vehicle availability is a computed business state influenced by bookings, maintenance, inspection, damage, transfers, manual blocking, and other operational events. Do not model availability as a single trusted boolean.
@@ -86,7 +94,7 @@ Pricing must be centralized in a dedicated pricing engine/service. Booking total
 Every booking transition must be explicit and validated. Prevent double booking through authoritative server-side conflict checks and appropriate database constraints/transaction handling.
 
 ### Financial integrity
-Payments, deposits, refunds, outstanding balances, invoices, and booking totals must have auditable records. Never derive historical financial truth solely from mutable current configuration.
+Payments, deposits, refunds, outstanding balances, invoices, marketplace commissions and booking totals must have auditable records. Never derive historical financial truth solely from mutable current configuration.
 
 ### Inspection
 Pickup and return inspections are first-class workflows. Record mileage, fuel, condition, photos, reported damage, responsible actor, timestamps, and the relationship to the rental event. Future AI-assisted comparison must fit this model rather than bypass it.
@@ -103,7 +111,11 @@ The initial product must support Arabic, French, and English, with DZD as a prim
 
 ## Map/location baseline
 
-The map is a first-class product capability. Customer web must support map/list search for branches, pickup locations and enabled locations. Owner web must manage coordinates, parking, delivery zones, hours and location-specific rules. PostGIS should back geospatial querying when the final architecture is approved. Never expose exact live vehicle/customer locations publicly by default.
+The map is a first-class product capability. Customer web must support map/list search for agencies, branches, pickup locations and enabled locations. Owner web must manage coordinates, parking, delivery zones, hours and location-specific rules. PostGIS should back geospatial querying when the final architecture is approved. Never expose exact live vehicle/customer locations publicly by default.
+
+## Payment baseline
+
+Release 1 must work without online card checkout. Customer-to-agency payment can use configured manual methods such as cash or bank transfer/reference. Agency-to-platform SaaS activation can use configured offline/manual workflows and License Keys. Future providers such as Chargily Pay must integrate through adapters and verified reconciliation/webhooks.
 
 ## Mobile baseline
 
@@ -111,4 +123,4 @@ Release 1 mobile is the Agency Operations App. It should optimize for pickup/ret
 
 ## Product philosophy
 
-This should be an operating platform, not a CRUD database. Important screens should help users understand what requires attention, what changed, what is due next, and what action should be taken.
+This should be an operating platform and regional marketplace, not a CRUD database. Important screens should help users understand what requires attention, what changed, what is due next, and what action should be taken.
