@@ -25,6 +25,7 @@ This registry defines the skills available to coding agents working on the repos
 | `frontend-design-review` | Design critique / frontend PR | Visual quality, hierarchy, accessibility, responsiveness, marketplace/dashboard/mobile UI review |
 | `ui-ux-pro-max-adapted` | Professional product UI planning/implementation | Design intelligence, visual direction, responsive patterns, accessibility, marketplace/dashboard/mobile quality |
 | `visual-design-taste` | Avoiding generic AI UI | Deliberate visual composition, product-specific hierarchy, imagery, density and polish |
+| `business-application-ux` | Enterprise/business UI | Dense tables, forms, filters, dialogs, workflows, dashboards, reports, consistent application shell |
 | `design-system-governance` | Reusable UI/component changes | Tokens, variants, components, themes, accessibility, consistency |
 | `shadcn-ui-governance` | shadcn/ui work | Component composition, semantic tokens, forms, tables, dialogs, accessibility |
 | `data-dense-ux` | Dashboards/tables/calendars | Operational information hierarchy, KPI/exception design, responsive dense views |
@@ -35,6 +36,7 @@ This registry defines the skills available to coding agents working on the repos
 | `resilient-mobile-ops` | Mobile operational workflows | Weak connectivity, retries, safe offline capture, sync status, QR/photo workflows |
 | `financial-auditability` | Financial workflows | Money, deposits, refunds, balances, reconciliation, snapshots, auditability |
 | `integration-connector-architecture` | External provider integration | Provider adapters, credentials, scopes, webhooks, retries, external IDs, replaceability |
+| `external-reference-registry` | External repository use | Govern audited references, license checks, local skill derivation, dependency discipline |
 | `testing-quality` | Testing/verification | Unit, integration, E2E, database/concurrency, mobile and release quality gates |
 | `maps-postgis` | Location/map work | PostGIS, proximity, delivery zones, map/list, geocoding, locations |
 | `plan-execution` | Implementing approved plans | Phase/task execution, checkpoints, validation, scope control |
@@ -68,6 +70,11 @@ The repository deliberately uses focused local skills instead of blindly copying
 ### Integration
 - `oomol-lab/open-connector` — Apache-2.0. https://github.com/oomol-lab/open-connector
 
+### Enterprise business software
+- `frappe/frappe` — MIT. https://github.com/frappe/frappe
+- `frappe/erpnext` — GPL-3.0. Research/reference only; not a runtime dependency. https://github.com/frappe/erpnext
+- `frappe/frappe-ui` — MIT. Vue component library; patterns only because this project uses React. https://github.com/frappe/frappe-ui
+
 ### Internal/project research
 - `userkxm00/pos-global` was reviewed as an internal design/engineering reference for offline-first thinking, atomic operations, audit logs, exact financial calculations, fail-closed security, backups, i18n, licensing, synchronization and operational verification.
 - Mellah-POS-V2 was reviewed as an additional internal engineering reference for offline-first thinking, auditability, exact financial calculations, fail-closed security, backups and i18n.
@@ -83,7 +90,7 @@ Do not load every skill for every task. Load only the skills relevant to the cha
 
 Examples:
 - Customer marketplace UI → `frontend-design` + `ui-ux-pro-max-adapted` + `visual-design-taste` + `frontend-design-review` + `design-system-governance` + `rtl-i18n-quality` + `visual-qa`
-- Agency dashboard → `frontend-design` + `ui-ux-pro-max-adapted` + `data-dense-ux` + `frontend-code-review`
+- Agency dashboard → `frontend-design` + `ui-ux-pro-max-adapted` + `business-application-ux` + `data-dense-ux` + `frontend-code-review`
 - Agency mobile inspection → `mobile-design-system` + `resilient-mobile-ops` + `rtl-i18n-quality` + `visual-qa`
 - Booking endpoint → `car-rental-domain` + `nestjs-production` + `api-contracts` + `postgres-production` + `testing-quality`
 - Payment/refund → `car-rental-domain` + `financial-auditability` + `nestjs-production` + `testing-quality`
