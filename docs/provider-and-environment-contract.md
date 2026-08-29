@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines concrete Release 1 providers and how their configuration enters the application. Provider choice must not leak into domain logic.
+This document defines concrete Release 1 providers and how configuration enters the application. Provider choice must not leak into domain logic, and no specific IDE/agent/router is mandatory.
 
 ## Authoritative providers
 
@@ -24,7 +24,7 @@ This document defines concrete Release 1 providers and how their configuration e
 - Domain modules must not import provider SDK types directly.
 - Provider-specific identifiers must be mapped to application-level identifiers.
 - Provider adapters live in infrastructure/integration boundaries.
-- Provider secrets are only loaded from environment/secret management.
+- Provider secrets are only loaded from secure environment/secret management.
 - Tests should use local/test implementations where possible.
 - Changing a provider must not require rewriting business rules.
 
@@ -32,18 +32,32 @@ This document defines concrete Release 1 providers and how their configuration e
 
 `.env.example` documents required variables and contains placeholders only.
 
-Real values must be supplied through:
+Real values may be supplied through any secure mechanism supported by the active development/deployment environment:
 
-- Replit encrypted Secrets during development/preview where applicable.
-- Production platform secret/environment management in deployment.
+- local environment variables;
+- Docker/Compose environment or secrets;
+- Replit Secrets;
+- CI/CD secret stores;
+- cloud secret managers;
+- equivalent secure mechanisms.
 
-Never commit `.env`, real credentials, access tokens, service-role keys, R2 secrets, or private signing/encryption keys.
+The application must not require one particular secret manager.
+
+Never commit `.env`, real credentials, access tokens, service-role keys, R2 secrets, private signing keys, or encryption secrets.
+
+## AI agent tooling
+
+KAVRIQO does not depend on a specific coding agent, model provider or AI router.
+
+OmniRoute may be used externally as an optional OpenAI-compatible AI gateway/router for connecting an agent to free, low-cost or paid model providers. It is not a KAVRIQO application dependency, runtime service, source of truth, or deployment requirement.
+
+Removing or replacing the router must not change application code, WBS, task IDs, business rules, or architecture.
 
 ## Maps
 
 Frontend uses MapLibre for rendering. MapTiler is the initial provider for tiles/search/geocoding.
 
-`MAPTILER_API_KEY` is treated as a frontend-facing provider key and must be restricted by allowed origins/referrers and the provider's documented controls. It is not an application authorization secret.
+`MAPTILER_API_KEY` is a frontend-facing provider key and must be restricted by allowed origins/referrers and the provider's documented controls. It is not an application authorization secret.
 
 PostGIS remains authoritative for stored coordinates, tenant-owned locations, delivery zones and spatial business queries.
 
@@ -51,13 +65,13 @@ PostGIS remains authoritative for stored coordinates, tenant-owned locations, de
 
 Supabase Auth provides login/session/authentication capabilities. NestJS remains authoritative for:
 
-- application User identity mapping
-- tenant membership
-- roles
-- permissions
-- resource ownership
-- entitlements
-- all business rules
+- application User identity mapping;
+- tenant membership;
+- roles;
+- permissions;
+- resource ownership;
+- entitlements;
+- all business rules.
 
 A Supabase user ID must never by itself grant access to a tenant or resource.
 
@@ -67,22 +81,22 @@ R2 is used for private object storage. PostgreSQL stores media metadata and refe
 
 Required controls:
 
-- private objects by default
-- controlled/signed access
-- MIME/type validation
-- size limits
-- checksum/metadata when useful
-- retention/deletion policy
+- private objects by default;
+- controlled/signed access;
+- MIME/type validation;
+- size limits;
+- checksum/metadata when useful;
+- retention/deletion policy.
 
 ## Redis
 
 Redis is non-authoritative. Losing Redis must not corrupt:
 
-- bookings
-- payments
-- balances
-- tenant ownership
-- audit history
+- bookings;
+- payments;
+- balances;
+- tenant ownership;
+- audit history.
 
 Queues and caches must be retry-safe and reconstructable.
 
@@ -102,11 +116,11 @@ Not every provider is required before Phase 01. Configure only what the current 
 
 Expected timing:
 
-- Phase 01: Supabase Auth + PostgreSQL
-- Fleet/media phases: R2
-- Marketplace/maps phase: MapTiler + MapLibre
-- jobs/notification phases: Redis
-- production hardening: Sentry + production hosting/backup configuration
+- Phase 01: Supabase Auth + PostgreSQL;
+- Fleet/media phases: R2;
+- Marketplace/maps phase: MapTiler + MapLibre;
+- jobs/notification phases: Redis;
+- production hardening: Sentry + production hosting/backup configuration.
 
 ## Local development baseline
 
