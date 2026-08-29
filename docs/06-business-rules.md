@@ -1,117 +1,128 @@
 # 06 — Business Rules
 
-This document defines product rules that must be enforced by the backend. UI validation is helpful but never authoritative.
+This document defines product rules that are authoritative unless superseded by a reviewed ADR. UI validation is helpful but never authoritative.
+
+## Tenancy and authorization
+
+- Every agency-scoped resource belongs to exactly one tenant/agency.
+- Tenant identity comes from authenticated context, never from an arbitrary client-supplied tenant ID.
+- Every read, write, search, export, file access and background job must enforce tenant scope.
+- Platform Admin and Agency Owner are distinct security domains.
+- Access is determined by role + tenant membership + permissions + plan entitlements where applicable.
 
 ## Booking integrity
 
 - A vehicle must never have overlapping operational commitments that make it unavailable for the requested rental interval.
-- Availability checks must be performed server-side at booking creation, confirmation, extension and vehicle reassignment.
-- Booking state transitions must follow an explicit state machine; arbitrary status edits are not allowed.
-- A booking must retain the commercial terms that applied when it was confirmed, including price components, discounts and applicable fees.
-- Cancellation and no-show outcomes must be policy-driven and auditable.
-- Extensions must recalculate availability and price using current rules while preserving the original booking history.
-- Manual/phone/walk-in bookings use the same booking engine as online bookings.
-- A booking cannot be completed without required rental lifecycle data and an authorized return workflow.
+- Availability checks must be server-side at quote, booking creation, confirmation, extension and vehicle reassignment where inventory changes.
+- Booking state transitions follow an explicit state machine; arbitrary status edits are forbidden.
+- Confirmed bookings retain immutable commercial terms: rates, discounts, fees, extras, deposit terms and currency.
+- Cancellation, no-show, late return and refund outcomes are policy-driven and auditable.
+- Extensions re-check availability and recalculate only the extension portion under current rules; original confirmed history remains intact.
+- Manual/phone/walk-in bookings use the same core booking engine as online bookings.
+- Retryable booking commands must be idempotent.
+- A booking cannot be confirmed against unavailable inventory.
 
 ## Availability
 
-Availability is derived from time-bounded operational blocks, including at minimum:
+Availability is derived from time-bounded operational commitments, including at minimum:
+- confirmed/active rentals
+- inventory-holding reservations according to policy
+- maintenance windows
+- inspection/readiness holds
+- accident/damage blocks
+- manual blackout blocks
+- vehicle transfer/repositioning holds
 
-- Confirmed/active rentals.
-- Approved reservations that hold inventory.
-- Maintenance windows.
-- Inspection or readiness holds.
-- Accident/damage blocks.
-- Manual blackout blocks.
-- Vehicle transfer/repositioning holds.
+A vehicle's displayed status is a projection/summary, never the sole source of truth for conflict prevention.
 
-A vehicle's displayed status is a projection/summary, not the source of truth for conflict prevention.
+## Quotes and pricing
 
-## Pricing
-
-- All booking totals are calculated server-side.
-- Client-submitted totals are treated as untrusted input.
-- Pricing rules are versioned/effective-dated where necessary.
-- Confirmed bookings retain immutable commercial snapshots.
-- Pricing supports configurable duration tiers, date/season rules, promotions, extras, deposits, fees and taxes where applicable.
-- Rounding rules must be defined centrally per currency.
-- Every invoice/receipt must be traceable to its underlying booking and transaction records.
+- Quotes and booking totals are calculated server-side.
+- Client-submitted totals are untrusted.
+- Pricing rules are effective-dated/versioned where historical reconstruction requires it.
+- Confirmed bookings retain immutable pricing snapshots.
+- Pricing may include duration tiers, date/season rules, weekend rules, promotions, extras, delivery fees, deposits, taxes and other configured charges.
+- Rounding rules are centralized by currency.
+- A quote may expire; an expired quote cannot be silently treated as a current price.
+- Every invoice/receipt must trace to authoritative booking and transaction records.
 
 ## Financial integrity
 
-- Payments, refunds, deposits and adjustments are recorded as auditable transactions.
-- A payment record cannot silently change from one financial meaning to another; corrections use reversal/refund/adjustment records.
-- Historical financial documents must not change because current configuration changes.
-- Outstanding balance is computed from authoritative transaction records, not from a mutable counter alone.
+- Payments, refunds, deposits and adjustments are auditable transactions.
+- A transaction cannot silently change financial meaning; corrections use reversal/refund/adjustment records.
+- Historical documents do not change because current configuration changes.
+- Outstanding balance is computed from authoritative transaction records, not only from a mutable counter.
 - Financial permissions are role- and tenant-scoped.
+- Subscription/license billing is separate from rental/customer payment records.
 
 ## Pickup and return
 
-- A vehicle cannot enter active rental state without a valid authorized checkout/pickup process.
-- Pickup captures required identity/contract references plus mileage, fuel, condition and evidence according to agency policy.
+- A vehicle cannot enter active rental state without an authorized pickup/check-out workflow.
+- Pickup captures required identity/document references plus mileage, fuel, condition and evidence according to agency policy.
 - Return captures final mileage, fuel, condition and evidence.
-- Damage identified at return must be linked to the rental and evidence record.
-- Staff can flag a discrepancy; liability is not automatically assigned solely by AI.
-- A returned vehicle may enter a cleaning/readiness/inspection hold before becoming rentable again.
+- Damage at return links to the rental/inspection and evidence.
+- A discrepancy may be flagged by staff; liability is not automatically assigned solely by AI.
+- Returned vehicles may enter cleaning/readiness/inspection holds before rentable state.
 
 ## Documents
 
-- Vehicle documents have document type, issuer/reference where appropriate, issue date, expiry date and verification status.
-- Expiring documents must create configurable alerts before expiry.
+- Vehicle documents contain document type, issue/expiry data and verification state where applicable.
+- Expiry alerts are configurable.
 - Customer documents are tenant-scoped and access-controlled.
-- Contract templates must be versioned so old signed contracts remain reproducible.
+- Contract templates are versioned so historical signed contracts remain reproducible.
+- Sensitive documents use private/signed access rather than permanent public URLs.
 
 ## Customers
 
-- Customer identity and eligibility fields are configurable by market/agency policy.
-- A customer may have multiple bookings and historical rentals under the same tenant.
-- Customers must be able to access their own documents/history but never another customer's data.
-
-## Tenant isolation
-
-- Every tenant-owned resource must be associated with a tenant/organization.
-- All reads, writes, searches, exports and background jobs must enforce tenant scope.
-- Cross-tenant IDs supplied by a client must not grant access.
-- Platform administrators may have broader access only through explicit platform-level authorization.
+- Customer identity and eligibility fields are configurable by agency/market policy.
+- Customers may have many bookings and historical rentals within each agency relationship.
+- Customer self-service can expose only records authorized for that customer.
+- A future Customer App must use the same customer/booking model as Customer Web.
 
 ## Roles
 
 Minimum roles:
+- Platform Admin
+- Agency Owner/Admin
+- Branch Manager
+- Staff/Agent
+- Finance (optional)
+- Customer
 
-- Platform Admin.
-- Agency Owner/Admin.
-- Branch Manager.
-- Staff/Agent.
-- Finance role (optional per agency).
-- Customer.
-
-Permissions should be capability-based/RBAC and enforced server-side.
+Permissions are capability-based/RBAC and are enforced server-side.
 
 ## Map and locations
 
-- A pickup/drop-off location must resolve to a supported location entity or explicit coordinate/address object.
-- Branch, parking, airport, hotel, delivery zone and custom meeting-point concepts must remain distinct enough to support different operational rules.
-- A location can be searchable and map-visible without being a rentable branch.
-- Different pickup and return locations require explicit support/eligibility and any associated fee/rule.
+- Pickup/drop-off can be branch, airport, hotel, delivery zone or custom point when enabled by agency policy.
+- Location identity, address, coordinates and external provider IDs are distinct concepts.
+- Different pickup/return locations require explicit eligibility and any applicable repositioning/delivery fee.
+- Delivery-zone eligibility and distance-based fees are calculated server-side.
+- Exact live vehicle position is never public by default.
 
 ## Localization
 
 - Supported product languages: Arabic, French, English.
-- Arabic must use RTL layout behavior, not only translated strings.
-- Locale-sensitive formatting must be centralized.
-- Customer-visible contracts/messages must use the customer's selected language where a translation exists.
-- Internal/admin users may choose their own interface language independent of the customer's language.
+- Arabic uses first-class RTL layout behavior.
+- Locale-sensitive number/date/currency formatting is centralized.
+- Customer-facing contracts and messages use the selected customer language where supported.
+- Internal users may select an interface language independently.
 
 ## Notifications
 
-Notifications are event-driven and must respect user preferences and channel availability.
+Notifications are event-driven and respect channel availability/preferences.
 
-Important events include booking creation/update, payment status, pickup reminders, return reminders, overdue rentals, document expiry, maintenance due, damage reports and support updates.
+Important events include booking updates, payment status, pickup/return reminders, overdue rentals, document expiry, maintenance due, damage reports, support updates, trial/subscription status and security events.
 
-## AI safety/product rules
+## Licensing and entitlements
 
-- AI must be assistive, explainable and bounded by domain permissions.
-- AI must not bypass business rules.
-- AI-generated damage findings require human confirmation before becoming a charge/liability fact.
-- AI business answers must be grounded in authorized platform data and identify uncertainty when data is incomplete.
-- AI must not expose data outside the current user's authorization scope.
+- Feature access is determined by computed entitlements, not raw license-key string checks.
+- Trial duration, grace periods and resource limits are configurable.
+- Subscription expiration must not immediately delete tenant data.
+- Platform Admin can issue/revoke licenses and temporary grants only through auditable operations.
+
+## AI
+
+- AI is assistive, permission-aware and bounded by domain rules.
+- AI never bypasses authorization or financial/booking rules.
+- AI damage findings require human confirmation before affecting liability/settlement.
+- Business answers are grounded only in data authorized for the requesting user and should expose uncertainty when evidence is incomplete.
