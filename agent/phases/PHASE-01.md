@@ -1,13 +1,25 @@
 # Phase 01 — Identity & Access
 
-Goal: establish secure identity, sessions, roles, permissions and privileged-action auditing.
+This file is the phase overview only. The canonical executable task specification is:
 
-Tasks:
-- 01-01 Foundation/runtime/config contract.
-- 01-02 User identity model and persistence.
-- 01-03 Sessions/tokens, verification and recovery.
-- 01-04 RBAC, agency/platform scopes and guards.
-- 01-05 Gate: unauthorized access rejected; role matrix enforced server-side; sensitive actions audited; tests/typecheck/lint/build pass.
+`agent/tasks/PHASE-01.md`
 
-Required skills: nestjs-production, postgres-production, api-contracts, testing-quality, agent-skill-security.
-Read: architecture/auth-model.md, architecture/security-threat-model.md, docs/36-authentication-and-authorization-architecture.md, docs/37-permission-matrix.md.
+## Goal
+
+Establish secure identity, sessions, roles, permissions and privileged-action auditing.
+
+## Task sequence
+
+01-01 → 01-02 → 01-03 → 01-04 → 01-05 (gate)
+
+## Gate
+
+Unauthorized access must be rejected; the role/permission matrix must be enforced server-side; tenant/platform scope must not be bypassable; sensitive actions must be audited; required tests/typecheck/lint/build must pass.
+
+## Required references
+
+- `architecture/architecture-freeze-decision.md`
+- `architecture/security-threat-model.md`
+- `docs/36-authentication-and-authorization-architecture.md`
+- `docs/37-permission-matrix.md`
+- `agent/tasks/PHASE-01.md`
