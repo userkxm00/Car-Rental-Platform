@@ -6,34 +6,42 @@ This directory is the autonomous implementation control plane for Car Rental Pla
 
 1. `MASTER_AUTONOMOUS_PROMPT.md` — one-time prompt for Replit Agent.
 2. `AUTONOMOUS_EXECUTION.md` — execution protocol.
-3. `EXECUTION_STATE.md` — persistent pointer/resume state.
-4. `TASK_REGISTRY.md` — 19 phases / 95 ordered tasks.
-5. `PHASE_TASK_SPECIFICATIONS.md` — task intent and gates.
-6. `EVIDENCE_LOG.md` — executable evidence history.
-7. `phases/PHASE-01.md` — detailed first implementation phase.
+3. `TASK_EXECUTION_STANDARD.md` — Ready/Done/evidence rules.
+4. `EXECUTION_STATE.md` — persistent checkpoint/resume pointer.
+5. `TASK_REGISTRY.md` — 19 phases / 95 ordered tasks.
+6. `tasks/PHASE-NN.md` — canonical executable task specification for each phase.
+7. `EVIDENCE_LOG.md` — executable evidence history.
 
-## How the agent progresses
+## Execution model
 
 ```text
-State -> Task -> Skills -> Inspect -> Implement -> Test -> Review -> Evidence
-      -> DONE -> Next Task -> Phase Gate -> Next Phase
+State
+→ Ready Check
+→ Phase Task Spec
+→ Load Skills
+→ Inspect
+→ Implement
+→ Test
+→ Repair
+→ Review
+→ Evidence
+→ DONE
+→ Next Task
+→ Phase Gate
+→ Next Phase
 ```
 
-## Human interaction policy
+The human owner does not need to coordinate normal task-to-task progress.
 
-Normal progress does not require human intervention. The agent should only stop for a documented human decision, an unresolvable engineering blocker, missing external credentials/accounts, or an irreversible destructive action.
+## Human interaction
 
-## Task records
-
-Each task has a stable ID in `TASK_REGISTRY.md`. During execution, the agent records task-specific evidence and status. This creates a durable audit trail without requiring the human to manually coordinate every task.
+Only genuine blockers require human input. Ordinary code errors, failed tests, missing small abstractions and normal implementation decisions must be resolved by the agent using repository source-of-truth.
 
 ## Phase structure
 
-Current plan contains:
+- Phase 00 — frozen architecture foundation.
+- Phases 01–13 — Release 1 implementation and pilot capability.
+- Phase 14 — Customer Mobile, Release 2+.
+- Phases 15–19 — notifications/automation, partners/loyalty, analytics/AI, hardening and production readiness.
 
-- Phase 00 — frozen architecture foundation
-- Phases 01–13 — Release 1 implementation and pilot capability
-- Phase 14 — Customer Mobile, Release 2+
-- Phases 15–19 — automation, partners, analytics/AI, hardening and production readiness
-
-The phase definitions in `agent/development-phases.md` remain the master roadmap. The registry/task specifications turn that roadmap into executable work.
+`agent/development-phases.md` is the roadmap summary. `agent/TASK_REGISTRY.md` is the canonical order. `agent/tasks/PHASE-NN.md` is the canonical task specification for the active phase.
