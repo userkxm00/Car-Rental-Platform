@@ -17,7 +17,9 @@ A phase is complete only when:
 - No known critical security defect remains.
 - The phase acceptance criteria are demonstrably satisfied.
 
-## Phase 00 — Foundation
+## Phase 00 — Foundation & Architecture
+
+**Status: FROZEN — Release 1 Core Architecture**
 
 - repository conventions
 - documentation structure
@@ -26,19 +28,28 @@ A phase is complete only when:
 - selected stack and architecture ADRs
 - observability baseline
 - design system/i18n foundations
+- Release 1 scope matrix
+- database/domain architecture
+- booking/availability/pricing architecture
+- security and tenancy baseline
+- marketplace/SaaS/monetization model
 
-Gate: repository builds/tests, quality gates exist, architecture is recorded, Arabic/French/English localization foundations exist.
+Gate: architecture freeze document is approved; repository guidance is authoritative; no critical architectural decision remains open.
+
+Any material change after freeze requires an ADR and impact review.
 
 ## Phase 01 — Identity and Access
 
-- authentication
+- authentication provider implementation behind the agreed abstraction
 - sessions/tokens
 - user profile
 - roles and permissions
 - platform administrator vs agency users
 - email/phone verification strategy
+- privileged-account MFA where enabled
+- device/session management
 
-Gate: unauthorized access is rejected, role matrix is enforced server-side, sensitive actions are audited.
+Gate: unauthorized access is rejected, role matrix is enforced server-side, tenant scope cannot be bypassed, sensitive actions are audited.
 
 ## Phase 02 — Multi-Tenancy and Organization
 
@@ -104,20 +115,23 @@ Gate: every state transition is valid, auditable and tested; online and manual b
 
 Gate: client totals cannot influence authoritative totals and historical booking pricing remains reproducible after configuration changes.
 
-## Phase 07 — Customer Platform
+## Phase 07 — Customer Platform & Marketplace
 
 - customer profile
-- search/filter
+- marketplace search/filter
 - map/list search
+- participating-agency discovery
+- public agency profiles
 - vehicle details/gallery
 - location details
 - quote/checkout
 - reservation portal
 - documents
 - rental lifecycle
+- reviews/comments
 - support
 
-Gate: a customer can discover, compare, book and retrieve their reservation without exposing another tenant/customer.
+Gate: a customer can discover, compare, select a specific agency offer, and complete a booking without exposing another tenant/customer or confusing platform and agency responsibility.
 
 ## Phase 08 — Contracts and Documents
 
@@ -183,7 +197,7 @@ Gate: a returned vehicle cannot become rentable while configured readiness block
 
 Gate: dashboard metrics reconcile with authoritative domain data and every exception provides a useful next action.
 
-## Phase 13 — Staff Mobile Operations
+## Phase 13 — Agency Mobile Operations
 
 - daily tasks
 - pickup workflow
@@ -196,7 +210,7 @@ Gate: dashboard metrics reconcile with authoritative domain data and every excep
 
 Gate: staff can complete a real pickup/return workflow on mobile and unsafe offline operations are prevented.
 
-## Phase 14 — Customer Mobile App
+## Phase 14 — Customer Mobile App (Future)
 
 - login/profile
 - search/booking
@@ -271,3 +285,7 @@ Gate: security checklist passes and recovery procedures are tested.
 - production smoke tests
 
 Gate: critical journeys pass in a production-like environment and rollback/recovery procedures are documented.
+
+## Global Agent rule
+
+Implement only the phase being executed and its explicit dependencies. Do not pull future features into an active phase merely because the architecture supports them. When a requirement is ambiguous, consult the repository documentation and references; do not invent a business rule. When a material architectural decision changes, stop and document an ADR before continuing.
