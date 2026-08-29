@@ -1,4 +1,4 @@
-# AGENTS.md — Car Rental Platform
+# AGENTS.md — KAVRIQO Car Rental Platform
 
 ## Role
 
@@ -6,7 +6,7 @@ Act as a senior production software engineer working in a documented, multi-tena
 
 ## Autonomous execution is the default
 
-This repository is designed for autonomous phase-by-phase implementation.
+This repository is designed for autonomous phase-by-phase implementation. The human owner should not need to manually orchestrate normal progress.
 
 Before implementation, read:
 
@@ -14,14 +14,23 @@ Before implementation, read:
 2. `architecture/architecture-freeze-decision.md`
 3. `architecture/architecture-freeze-status.md`
 4. `agent/AUTONOMOUS_EXECUTION.md`
-5. `agent/MASTER_AUTONOMOUS_PROMPT.md`
-6. `agent/TASK_EXECUTION_STANDARD.md`
-7. `agent/EXECUTION_STATE.md`
-8. `agent/TASK_REGISTRY.md`
-9. `agent/tasks/PHASE-NN.md` for the active phase
-10. relevant docs/architecture/ADRs/skills/references
+5. `agent/EXECUTION_RECOVERY.md`
+6. `agent/MASTER_AUTONOMOUS_PROMPT.md`
+7. `agent/TASK_EXECUTION_STANDARD.md`
+8. `agent/EXECUTION_STATE.md`
+9. `agent/TASK_REGISTRY.md`
+10. `agent/tasks/PHASE-NN.md` for the active phase
+11. relevant docs/architecture/ADRs/skills/references
 
 The agent must normally continue from the current execution pointer without asking the human to choose the next task or phase. Only stop for conditions explicitly classified as `HUMAN DECISION REQUIRED`.
+
+## External IDE task state is not authoritative
+
+Replit/IDE task cards and session-local agent state do not control this repository plan.
+
+A temporary task marked cancelled, stopped, expired, archived or unavailable is NOT by itself a blocker.
+
+When such a condition occurs, follow `agent/EXECUTION_RECOVERY.md`, reconcile the repository state, preserve valid partial work, and resume the canonical task from `EXECUTION_STATE.md` / `TASK_REGISTRY.md`.
 
 ## Source-of-truth hierarchy
 
@@ -34,7 +43,7 @@ When deciding how the system should behave, use this order:
 5. Audited references under `references/`
 6. External assumptions only when explicitly documented
 
-When sources conflict, stop and resolve the conflict in documentation/ADR before making a broad implementation change.
+When sources conflict, resolve them against the authoritative repository documents. Stop only when a genuine `HUMAN DECISION REQUIRED` condition exists.
 
 ## Required skill loading
 
@@ -99,7 +108,7 @@ Use exact monetary representation. Calculate authoritative totals server-side. P
 
 ## UI rules
 
-Use the established design system. Support Arabic RTL, French and English. Important async interactions need loading/empty/success/error states. Validate responsive and RTL/LTR behavior where affected.
+Use the established KAVRIQO design system. Support Arabic RTL, French and English. Important async interactions need loading/empty/success/error states. Validate responsive and RTL/LTR behavior where affected.
 
 ## Reference rules
 
