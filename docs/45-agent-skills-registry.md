@@ -23,6 +23,8 @@ This registry defines the skills available to coding agents working on the repos
 | `api-contracts` | API contract work | REST, OpenAPI, DTOs, errors, pagination, idempotency, webhooks |
 | `frontend-design` | UI/UX implementation | Customer marketplace, agency dashboard, responsive UI, accessibility, Arabic RTL |
 | `frontend-design-review` | Design critique / frontend PR | Visual quality, hierarchy, accessibility, responsiveness, marketplace/dashboard/mobile UI review |
+| `ui-ux-pro-max-adapted` | Professional product UI planning/implementation | Design intelligence, visual direction, responsive patterns, accessibility, marketplace/dashboard/mobile quality |
+| `visual-design-taste` | Avoiding generic AI UI | Deliberate visual composition, product-specific hierarchy, imagery, density and polish |
 | `design-system-governance` | Reusable UI/component changes | Tokens, variants, components, themes, accessibility, consistency |
 | `shadcn-ui-governance` | shadcn/ui work | Component composition, semantic tokens, forms, tables, dialogs, accessibility |
 | `data-dense-ux` | Dashboards/tables/calendars | Operational information hierarchy, KPI/exception design, responsive dense views |
@@ -32,16 +34,20 @@ This registry defines the skills available to coding agents working on the repos
 | `mobile-design-system` | Agency mobile UI | Expo/React Native tokens, components, native-feeling operations UX, RTL |
 | `resilient-mobile-ops` | Mobile operational workflows | Weak connectivity, retries, safe offline capture, sync status, QR/photo workflows |
 | `financial-auditability` | Financial workflows | Money, deposits, refunds, balances, reconciliation, snapshots, auditability |
+| `integration-connector-architecture` | External provider integration | Provider adapters, credentials, scopes, webhooks, retries, external IDs, replaceability |
 | `testing-quality` | Testing/verification | Unit, integration, E2E, database/concurrency, mobile and release quality gates |
 | `maps-postgis` | Location/map work | PostGIS, proximity, delivery zones, map/list, geocoding, locations |
 | `plan-execution` | Implementing approved plans | Phase/task execution, checkpoints, validation, scope control |
 | `agent-skill-security` | Importing external skills | Vet external SKILL.md files before adoption |
+| `pos-global-lessons` | Reusable enterprise engineering patterns | Atomicity, auditability, exact money, boundaries, resilience, evidence and cross-client contracts |
 
 ## External skill sources used as research
 
 The repository deliberately uses focused local skills instead of blindly copying large external skill packs.
 
 ### Frontend/design
+- `Leonxlnx/taste-skill` — MIT. https://github.com/Leonxlnx/taste-skill
+- `nextlevelbuilder/ui-ux-pro-max-skill` — MIT. https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
 - Anthropic Agent Skills — frontend design patterns. https://github.com/anthropics/skills
 - Microsoft Agent Skills — systematic frontend design review, accessibility, responsive and design-system checks. https://github.com/microsoft/skills
 - shadcn/ui official Agent Skill — component composition, semantic tokens, accessibility and project-aware UI operations. https://github.com/shadcn-ui/ui/tree/main/skills/shadcn
@@ -59,8 +65,12 @@ The repository deliberately uses focused local skills instead of blindly copying
 - obra/superpowers — executing-plans workflow. https://github.com/obra/superpowers
 - Microsoft Playwright / OpenAI Playwright skills — browser automation and rendered verification patterns. https://github.com/microsoft/playwright and https://github.com/openai/skills
 
+### Integration
+- `oomol-lab/open-connector` — Apache-2.0. https://github.com/oomol-lab/open-connector
+
 ### Internal/project research
-- Mellah-POS-V2 was reviewed as an internal design/engineering reference for offline-first thinking, audit logs, exact financial calculations, fail-closed security, backups, i18n, and operational verification.
+- `userkxm00/pos-global` was reviewed as an internal design/engineering reference for offline-first thinking, atomic operations, audit logs, exact financial calculations, fail-closed security, backups, i18n, licensing, synchronization and operational verification.
+- Mellah-POS-V2 was reviewed as an additional internal engineering reference for offline-first thinking, auditability, exact financial calculations, fail-closed security, backups and i18n.
 - Car Rental Platform audited repositories are listed under `references/` and remain research sources, not implementation truth.
 
 ## Adoption policy
@@ -72,12 +82,13 @@ External skills must be reviewed before installation. A local derivative is pref
 Do not load every skill for every task. Load only the skills relevant to the change.
 
 Examples:
-- Customer marketplace UI → `frontend-design` + `frontend-design-review` + `design-system-governance` + `rtl-i18n-quality` + `visual-qa`
-- Agency dashboard → `frontend-design` + `data-dense-ux` + `frontend-code-review`
+- Customer marketplace UI → `frontend-design` + `ui-ux-pro-max-adapted` + `visual-design-taste` + `frontend-design-review` + `design-system-governance` + `rtl-i18n-quality` + `visual-qa`
+- Agency dashboard → `frontend-design` + `ui-ux-pro-max-adapted` + `data-dense-ux` + `frontend-code-review`
 - Agency mobile inspection → `mobile-design-system` + `resilient-mobile-ops` + `rtl-i18n-quality` + `visual-qa`
 - Booking endpoint → `car-rental-domain` + `nestjs-production` + `api-contracts` + `postgres-production` + `testing-quality`
 - Payment/refund → `car-rental-domain` + `financial-auditability` + `nestjs-production` + `testing-quality`
 - Map search → `maps-postgis` + `car-rental-domain` + `api-contracts` + `testing-quality`
+- External provider → `integration-connector-architecture` + relevant domain/API/security/testing skills
 
 ## Maintenance
 
