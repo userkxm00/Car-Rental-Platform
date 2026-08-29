@@ -11,13 +11,32 @@ When deciding how the system should behave, use this order:
 1. Accepted architecture decisions and security requirements
 2. Product and business-rule specifications under `docs/`
 3. Current validated implementation and tests
-4. Audited references under `references/`
-5. External assumptions only when explicitly documented
+4. Project skills under `.agents/skills/`
+5. Audited references under `references/`
+6. External assumptions only when explicitly documented
 
 When sources conflict, stop and resolve the conflict in documentation/ADR before making a broad implementation change.
 
+## Required skill loading
+
+Before a task in a covered area, load the relevant project skill(s) under `.agents/skills/`. Multiple skills may apply.
+
+- Rental business logic → `car-rental-domain`
+- PostgreSQL/PostGIS/schema/query/migration work → `postgres-production`
+- NestJS/backend/API implementation → `nestjs-production`
+- API contracts/OpenAPI/DTOs/idempotency/webhooks → `api-contracts`
+- React/Web UI/RTL/accessibility/design → `frontend-design`
+- Tests/quality gates → `testing-quality`
+- Maps/geospatial/location work → `maps-postgis`
+- Executing a written phase/task plan → `plan-execution`
+- Importing or reviewing an external skill → `agent-skill-security`
+
+Skills supplement, but never override, accepted ADRs, repository security requirements, or source-of-truth product rules.
+
 ## Required behavior before coding
 
+- Read `replit.md` and this file.
+- Load the relevant skills.
 - Read the relevant specification files.
 - Inspect the existing implementation before creating new abstractions.
 - Search for existing domain services, validation, permissions, and reusable components.
