@@ -1,235 +1,180 @@
 # Authentication & Authorization Architecture
 
-## Scope
+## Decision
 
-This document defines identity, authentication, sessions, roles, tenant membership and authorization for the Car Rental Platform.
+**Release 1 Authentication Provider: Supabase Auth.**
 
-## Core distinction
+Supabase Auth is used strictly as the external identity provider for authentication. It is not the source of truth for rental-domain authorization, tenant ownership, memberships, permissions, entitlements, bookings, payments, or other business data.
 
-Authentication answers: **Who are you?**
-
-Authorization answers: **What can you do, in which tenant, on which resource?**
-
-Both are mandatory. A successful login never implies permission to access every resource.
-
-## Release 1 actors
-
-- Platform Admin — operator of the SaaS platform.
-- Agency Owner/Admin — full administration within one agency according to plan/permissions.
-- Branch Manager — branch-scoped management.
-- Staff/Agent — operational workflows according to assigned permissions.
-- Finance — financial capabilities if enabled.
-- Customer — public booking/self-service access through web; dedicated mobile client is later.
-
-## Identity model
-
-One `user` identity may have multiple memberships:
+## Responsibility split
 
 ```text
+Supabase Auth
+  ├── Sign up / sign in
+  ├── Email verification
+  ├── Password recovery
+  ├── Session/token lifecycle
+  └── Supported MFA capability
+          ↓
+Application Identity Boundary (NestJS)
+          ↓
 User
- ├── Platform membership (special)
- ├── Organization A membership → role(s)
- └── Organization B membership → role(s)
+  ↓
+Agency Membership
+  ↓
+Role
+  ↓
+Permission
+  ↓
+Tenant / Branch / Resource scope
+  ↓
+Business Rules
+  ↓
+Entitlement / Plan checks where applicable
 ```
 
-Do not create separate identities simply because a person has multiple roles.
+The NestJS backend is authoritative for application identity mapping and all authorization decisions.
 
-## Authentication options
+## Why this decision
 
-The final provider must be selected after evaluating:
-- email/password requirements
-- phone/OTP requirements
-- email verification
-- password reset
-- MFA/2FA
-- session management
-- mobile compatibility
-- social login (optional)
-- abuse/rate limiting
-- recovery flows
-- data portability
+Supabase Auth is preferred for Release 1 because it reduces the amount of security-sensitive authentication infrastructure that the project must implement and maintain while remaining PostgreSQL-aligned and compatible with web and React Native/Expo clients.
 
-The provider must not force the domain model to be provider-specific.
+The project explicitly avoids using Supabase as a general application backend. The architecture remains centered on NestJS + PostgreSQL + PostGIS + Prisma.
 
-## Recommended authentication posture
+## Application identity boundary
 
-- Short-lived access tokens where token-based APIs are used.
-- Rotating/revocable refresh/session mechanism.
-- Secure HTTP-only cookies for browser sessions where appropriate.
-- Secure device storage for mobile credentials/tokens.
-- MFA for platform admins and optionally agency admins.
-- Email/phone verification according to configured risk/policy.
-- Password reset tokens are single-use and expire quickly.
-- Rate limit login, OTP, password reset and verification endpoints.
+Every Supabase-authenticated principal maps to an application `User` record through a stable provider identity mapping.
 
-Never store plaintext passwords in the application database.
+Do not scatter Supabase user IDs throughout domain logic.
 
-## Authorization pipeline
+Domain entities reference the application's user identity.
 
-Every protected request should conceptually pass through:
+Recommended conceptual mapping:
 
 ```text
-Request
- ↓
-Authentication
- ↓
-User active?
- ↓
-Tenant context established
- ↓
-Role/permission check
- ↓
-Resource ownership/scope check
- ↓
-Business rule check
- ↓
-Action
- ↓
-Audit event when sensitive
+Auth Provider Subject
+        ↓
+ExternalIdentity
+        ↓
+Application User
+        ↓
+Membership / Customer / Actor references
 ```
 
-## RBAC plus resource scope
+The application user record is responsible for domain-level profile and lifecycle information.
 
-RBAC is necessary but insufficient.
+## Roles and permissions
 
-Example:
+Minimum roles:
 
-```text
-Role: Staff
-Permission: booking.read
-Tenant: Agency A
-Branch scope: Branch 3
-```
+- Platform Admin
+- Agency Owner/Admin
+- Branch Manager
+- Staff/Agent
+- Finance where enabled
+- Customer
 
-The user may read booking X only if:
-- they are authenticated,
-- they belong to Agency A,
-- they possess `booking.read`,
-- and the booking is within their permitted branch/resource scope.
+Roles are bundles. Stable fine-grained permissions remain the actual authorization capabilities.
 
-## Permission naming
+Authorization is evaluated server-side using:
 
-Use stable capability names such as:
+1. authenticated identity
+2. active application user state
+3. tenant membership
+4. role/permission
+5. branch/resource scope
+6. business rule
+7. entitlement/plan policy where relevant
 
-- `vehicle.read`
-- `vehicle.create`
-- `vehicle.update`
-- `vehicle.archive`
-- `booking.read`
-- `booking.create`
-- `booking.confirm`
-- `booking.cancel`
-- `booking.extend`
-- `inspection.perform`
-- `damage.review`
-- `payment.read`
-- `payment.create`
-- `refund.create`
-- `pricing.manage`
-- `staff.manage`
-- `report.read`
-- `subscription.manage`
+A client must never be able to elevate its own role, tenant, permission or entitlement.
 
-Do not encode plan limits inside role names.
+## Sessions and tokens
 
-## Tenant isolation
+Browser and mobile authentication may use the session/token mechanisms provided by Supabase Auth, but the application must enforce its own authorization on every protected backend request.
 
-Tenant context must be established from trusted server-side identity/membership, not a client-supplied `tenantId` alone.
+Requirements:
 
-Every tenant-owned query must enforce tenant scope. Cross-tenant object IDs must not be useful authorization bypasses.
+- secure session handling
+- token expiration and refresh according to provider mechanisms
+- logout/revocation behavior
+- password recovery
+- verification
+- rate limiting on sensitive authentication endpoints
+- privileged-account MFA according to the final security policy
+- secure mobile token storage using platform-appropriate secure storage
 
-Background jobs must carry explicit tenant context.
+Do not store authentication secrets in ordinary browser local storage when a safer provider/session mechanism is available.
 
-Exports, files, notifications, search, analytics and support must also enforce tenant scope.
+## NestJS integration
+
+The backend must validate the incoming authentication credential/token using the official provider mechanism, then map the authenticated subject to the application user.
+
+Authorization guards must use application identity/membership/permission context, not provider claims alone.
+
+Provider-specific SDK calls must remain inside the infrastructure/auth adapter layer.
+
+Domain services must not depend directly on Supabase SDK types.
+
+## Customer and agency overlap
+
+One application `User` may be a customer and also belong to one or more agencies through explicit memberships.
+
+Do not create duplicate application users merely because the same person uses different product surfaces.
 
 ## Platform Admin isolation
 
-Platform Admin is a different security domain from Agency Owner.
+Platform administration is a separate authorization boundary.
 
-Agency admins must never gain platform powers by changing a role value client-side or by selecting a different tenant identifier.
+A user cannot become a Platform Admin by editing a client payload, selecting another tenant, changing a role in the frontend, or modifying provider metadata without server-side authorization.
 
-Platform administrative APIs should use explicit platform-level guards and separate audit semantics.
+Platform-level actions require explicit platform permissions and audit events.
 
-## Customer authorization
+## Tenant isolation
 
-Customers may access only:
-- their own profile
-- their own bookings
-- documents legitimately belonging to their bookings
-- their own support conversations
-- customer-facing data intentionally marked public
+Tenant context is derived server-side from authenticated application identity and membership.
 
-Customer endpoints must not expose agency internal notes, staff information, financial internals or unrelated customer data.
+A supplied `tenantId` is never sufficient authorization.
 
-## Session lifecycle
+Every tenant-owned read/write/export/search/job/file access must enforce tenant scope.
 
-Support:
-- login
-- logout current session
-- logout all sessions
-- token/session rotation
-- device/session listing where useful
-- revocation after password/security changes
-- inactivity/absolute lifetime policy according to risk
+## Provider portability
 
-## MFA / 2FA
+The domain does not depend on Supabase-specific identifiers or behavior.
 
-MFA should be prioritized for:
-- Platform Admin
-- Agency Owner/Admin
-- financial/refund-sensitive roles
+A future migration to another identity provider must be possible by replacing the external identity adapter/mapping without redesigning the rental domain.
 
-Possible methods can be added through an authentication provider/adapter.
+Provider-specific fields belong in identity/infrastructure boundaries only.
 
-## Service-to-service authorization
+## Testing requirements
 
-Background workers and scheduled jobs must not impersonate arbitrary end users.
+Auth implementation is incomplete until tests verify at minimum:
 
-Use explicit service identities/claims plus tenant context and least privilege.
+- valid login/session accepted
+- invalid/revoked credential rejected
+- password recovery flow
+- verification behavior
+- privileged MFA policy where enabled
+- customer cannot access agency-only resources
+- agency user cannot access another tenant
+- branch-limited user cannot access another branch
+- platform-only endpoint rejects agency users
+- removed/suspended membership is denied
+- logout/revocation invalidates protected access as designed
+- provider subject cannot be used to bypass application identity mapping
 
-## File access authorization
+## Security requirements
 
-Signed/private object URLs must be issued only after checking the user/tenant/resource relationship.
+- Never trust provider metadata as application authorization.
+- Never expose provider admin/service secrets to client applications.
+- Never log raw authentication tokens.
+- Never use client-selected roles or tenants.
+- Rate-limit authentication and recovery flows.
+- Keep provider SDK integration isolated.
 
-Never expose unrestricted document bucket URLs for identity documents, signed contracts or sensitive inspection evidence.
+## Migration rule
 
-## Audit events
+If the project changes authentication providers later, the change requires an ADR and migration plan. The application identity model remains stable.
 
-Record sensitive actions such as:
-- login/security changes
-- role/permission changes
-- tenant membership changes
-- payment/refund actions
-- contract/signature events
-- damage/liability decisions
-- license/entitlement overrides
-- platform suspension/reactivation
+## Final decision
 
-Do not put passwords, raw tokens or sensitive document contents into audit records.
-
-## Failure semantics
-
-Prefer not-found semantics for resources where revealing resource existence would leak sensitive cross-tenant information.
-
-All authorization failures should be consistent and observable without exposing internal security details.
-
-## Authorization testing
-
-Mandatory tests include:
-- cross-tenant read blocked
-- cross-tenant update blocked
-- cross-tenant export blocked
-- staff cannot perform owner-only action
-- customer cannot access agency endpoints
-- branch-limited staff cannot access another branch
-- platform admin-only endpoints reject agency users
-- expired/suspended account behavior
-- revoked session/token behavior
-
-## Provider abstraction
-
-Whether the implementation uses a managed authentication provider or a self-managed identity module, domain code must depend on an internal identity/authorization interface rather than scattering provider-specific calls throughout business modules.
-
-## Final architectural rule
-
-**No client-selected role, tenant ID, permission flag, or UI route is authoritative. The backend determines identity, tenant, permissions, resource scope and business eligibility.**
+**Use Supabase Auth for Release 1 authentication only. Keep NestJS + PostgreSQL as the authoritative application/domain platform.**
