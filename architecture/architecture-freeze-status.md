@@ -4,69 +4,89 @@
 
 **FROZEN — Release 1 Core Architecture**
 
-This file is the single authoritative freeze-status document. Product/business details live under `docs/`; architecture decisions live under `architecture/`; execution state lives under `agent/`.
+This is the single authoritative freeze-status document.
 
-## What is frozen
+## Frozen product and technical baseline
 
 - Product model: Agency SaaS + Customer Marketplace + Platform Control Plane.
 - Release 1 client surfaces: Customer Web, Agency Web, Agency Operations Mobile, Platform Owner Web.
 - Customer Mobile App is Release 2+.
 - TypeScript + NestJS modular monolith.
-- PostgreSQL + PostGIS + Prisma with isolated SQL paths where PostGIS-specific behavior requires them.
+- PostgreSQL + PostGIS + Prisma, with isolated SQL paths where PostgreSQL/PostGIS-specific behavior requires them.
 - Versioned REST API `/api/v1` + OpenAPI.
-- Provider-neutral auth, storage, maps/geocoding, messaging and payment adapters.
-- Explicit multi-tenant isolation and RBAC/permission/resource scope.
+- Explicit multi-tenant isolation and server-side RBAC/permission/resource scope.
 - Server-authoritative availability, booking, pricing and financial truth.
-- Hybrid monetization architecture: Free + Trial + Subscription + License Key + Manual Renewal + optional Marketplace Commission + optional Google Ads, with independent activation.
+- Hybrid monetization: Free + Trial + Subscription + License Key + Manual Renewal + optional Marketplace Commission + optional Google Ads, independently configurable.
 - Arabic/French/English + RTL + DZD baseline.
 - First-class map/list marketplace discovery.
 - Pickup/return inspection, damage evidence and maintenance/readiness workflows.
 - Security, auditability, idempotency, testing and observability requirements.
 
-## Provider decisions
+## Authentication decision
 
-Provider selection is an implementation-level decision behind approved abstractions, not a reason to change the frozen domain architecture. The executing phase must select and record concrete providers before the first task that requires them.
+**Release 1 Identity Provider: Supabase Auth.**
 
-Required examples:
-- Identity provider for Phase 01.
-- Managed PostgreSQL hosting for deployment work.
-- Object storage provider before production media/document work.
-- Initial map/geocoding provider before production map integration.
-- Payment provider only when its task is reached; Release 1 must work without online customer checkout.
+Supabase Auth is an authentication service only. The application domain remains authoritative in NestJS + PostgreSQL.
 
-A provider choice must be recorded in an ADR or implementation decision note when it creates material operational or security consequences.
+```text
+Supabase Auth
+    ↓
+Application Identity Boundary
+    ↓
+User
+    ↓
+Membership / Role / Permission
+    ↓
+Tenant / Branch / Resource scope
+    ↓
+Business Rules / Entitlements
+```
+
+Provider-specific SDK calls and identifiers must remain inside the auth/infrastructure boundary. Domain services must not depend on Supabase SDK types or use provider metadata as authorization truth.
+
+## Provider abstraction rule
+
+Other external providers remain replaceable adapters:
+
+- object storage
+- maps/geocoding/routing
+- customer/agency messaging
+- payment gateways
+
+Their concrete provider is selected when its implementation phase begins and recorded when the choice has material operational/security consequences.
+
+Provider selection does not reopen the frozen domain architecture.
 
 ## Freeze does NOT mean
 
-- Every future feature is implemented now.
-- Every provider is permanently fixed forever.
-- A UI cannot evolve.
-- A new feature cannot be added.
+- every future feature is implemented now;
+- every vendor is permanent forever;
+- UI cannot evolve;
+- normal feature work requires an ADR.
 
-It means the core architecture cannot be silently replaced or contradicted.
+The freeze prevents silent changes to the core architecture and authoritative business invariants.
 
 ## Change policy
 
-A material change to database technology, tenancy, identity architecture, authorization model, booking/availability invariants, API contract strategy, monetary source of truth, storage/security model, deployment topology, or client responsibilities requires:
+A material change to database technology, tenancy, authentication architecture, authorization model, booking/availability invariants, API strategy, monetary source of truth, storage/security model, deployment topology, or client responsibilities requires:
 
-1. written problem statement;
+1. problem statement;
 2. impact analysis;
 3. ADR/update;
 4. documentation synchronization;
-5. only then implementation.
-
-Normal feature work that stays inside the frozen architecture does not require a new ADR.
+5. implementation only after that review.
 
 ## Freeze gate result
 
-All previously listed pre-freeze concerns have been converted into either:
-- frozen architecture rules;
-- phase/task implementation decisions behind an abstraction;
+The previously open architecture-readiness items have been classified as:
+
+- fixed core architecture rules;
+- implementation-level provider decisions behind abstractions;
 - Release 1 acceptance criteria;
-- or documented future scope.
+- future/deferred scope.
 
-Therefore the repository is authorized to begin **Phase 01 — Identity & Access**.
+Authentication is now explicitly decided as Supabase Auth for Release 1.
 
-## Next phase
+The repository is therefore authorized to execute:
 
 `PHASE-01` / `TASK-01-01`
