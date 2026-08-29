@@ -30,6 +30,7 @@ Master Roadmap
 - `agent/tasks/PHASE-NN.md` — canonical five-task specification for each phase.
 - `agent/EVIDENCE_LOG.md` — durable checkpoint evidence.
 - `agent/TASK_EXECUTION_STANDARD.md` — task Ready/Done/evidence standard.
+- `agent/EXECUTION_RECOVERY.md` — recovery rules for interrupted/cancelled IDE tasks and stale metadata.
 
 ## Required behavior
 
@@ -50,6 +51,22 @@ Master Roadmap
 15. Run the phase gate after all five tasks are DONE.
 16. Advance only when the phase gate passes.
 17. Continue autonomously.
+
+## External IDE task state is NOT the source of truth
+
+Replit/IDE task cards, generated task summaries, cancelled task labels, temporary planning artifacts, and session-local agent state must never override the repository execution system.
+
+If an IDE task is marked `cancelled`, `stopped`, `expired`, `archived`, or otherwise unavailable, do NOT stop the repository execution unless the repository `EXECUTION_STATE.md` or a canonical task specification explicitly says the task is blocked or superseded.
+
+Instead:
+
+1. Read `EXECUTION_RECOVERY.md`.
+2. Inspect the repository state/diff.
+3. Determine the canonical task from `EXECUTION_STATE.md` + `TASK_REGISTRY.md`.
+4. Reconcile stale metadata.
+5. Resume the canonical task from the repository state.
+
+A cancelled temporary task is not equivalent to `BLOCKED — HUMAN DECISION REQUIRED`.
 
 ## No routine confirmation
 
