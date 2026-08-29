@@ -7,10 +7,13 @@ Build a production-grade multi-tenant SaaS platform for car-rental businesses. T
 ## Product surfaces
 
 1. Customer Web
-2. Customer Mobile App for iOS and Android
-3. Owner/Admin Web
-4. Staff operational mobile experience
-5. Shared backend API and domain services
+2. Customer Mobile App — consumer/renter experience
+3. Owner/Admin Web — agency administration and complex configuration
+4. Operations Mobile App — staff workflows and owner/manager companion capabilities
+5. Platform Owner Control Center Web — SaaS administration, plans, licenses, entitlements, feature flags, support, and platform health
+6. Shared backend API and domain services
+
+Read `docs/34-app-surface-and-role-strategy.md` before making any role-specific mobile or admin decision.
 
 ## Core domains
 
@@ -32,6 +35,7 @@ Build a production-grade multi-tenant SaaS platform for car-rental businesses. T
 - Analytics and reporting
 - AI-assisted operational intelligence
 - Audit logs
+- SaaS plans, subscriptions, licenses, entitlements, and feature flags
 
 ## Non-negotiable engineering rules
 
@@ -48,6 +52,9 @@ Build a production-grade multi-tenant SaaS platform for car-rental businesses. T
 - Do not make broad rewrites when a focused change is sufficient.
 - Do not silently alter an accepted architecture decision; create/update an ADR.
 - Critical workflows require automated tests before being considered complete.
+- Never use a raw license key, plan name, or UI feature flag as the sole authorization mechanism; use server-side entitlement decisions.
+- Do not expose platform-owner controls to agency users.
+- Do not put complex agency administration inside the consumer mobile app.
 
 ## Agent workflow
 
@@ -70,6 +77,7 @@ Reference projects are for learning patterns, workflows, architecture ideas, and
 
 Primary reference: `aelassas/bookcars`.
 Secondary references: `Mohamed-Galdi/real-rent-car`, `Abdellatif404/Car-Rental-Website`, `Brownie-08/Updated-Car-Rental`.
+Regional reference: `abdelmoughit555/rental-car` (Autorockin), especially for multilingual/map/address UX.
 
 ## Critical domain concepts
 
@@ -91,9 +99,19 @@ Pickup and return inspections are first-class workflows. Record mileage, fuel, c
 ### Multi-tenancy
 The architecture must support multiple agencies and multiple branches while preventing cross-tenant access. Tenant ownership and authorization must be explicit in data access and APIs.
 
+### Maps and locations
+Map/location is a first-class capability. Support map/list search, branch/parking/pickup points, airport/hotel/custom pickup where configured, address autocomplete, delivery zones, distance-aware fees where appropriate, and provider abstraction. Never expose exact live vehicle/customer locations by default.
+
+### SaaS entitlements
+Agency access is controlled through server-side subscription/entitlement state. Trial, paid plans, license grants, manual overrides, limits, feature entitlements, revocation, and grace periods must be auditable and tenant-scoped.
+
 ## Localization baseline
 
-The initial product must support Arabic, French, and English, with DZD as a primary market currency and an architecture that can support additional currencies/languages later. RTL must be treated as a first-class UI requirement.
+The initial product must support Arabic, French, and English, with DZD as a primary market currency and an architecture that can support additional currencies/languages later. RTL must be treated as a first-class UI requirement. Customer-facing and operational terminology must be translatable; business values and stored enums must not depend on translated text.
+
+## Mobile strategy
+
+Use purpose-built mobile surfaces: Customer App for renters and Operations App for agency staff/owners. They share backend/domain logic but do not share role permissions or navigation indiscriminately. Platform Owner administration is web-first.
 
 ## Product philosophy
 
