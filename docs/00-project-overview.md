@@ -81,6 +81,12 @@ Booking
 
 The marketplace must clearly identify the agency behind every offer. It must not imply that all agencies share ownership of vehicles or operational responsibility.
 
+## Agency profiles
+
+Every participating agency may have a public profile containing its identity, verification status, branches/locations, opening hours, services, policies, ratings/reviews, contact methods, and currently bookable vehicles/offers from that agency only.
+
+The profile is localized for Arabic, French, and English where translations exist and uses the same map/location infrastructure as marketplace search.
+
 ## Agency autonomy
 
 Each agency remains the operator of its own fleet and bookings.
@@ -115,20 +121,42 @@ The architecture should support ranking signals such as:
 - verified agency status
 - policy fit
 
-Ranking rules must be documented and should not silently disadvantage agencies without a product/business reason.
+Sponsored placement, if introduced, must be visibly labeled and must not override hard eligibility rules.
+
+## Reviews and comments
+
+Qualified completed/eligible bookings can produce agency ratings and written reviews. Agencies may respond. Reviews are moderated and auditable, with anti-abuse controls and a report workflow.
+
+Customer reputation signals, if introduced later, are private/controlled by default and are not an automatic public blacklist.
 
 ## Verification and moderation
 
-Because the marketplace connects customers to independent agencies, the platform needs future-ready controls for:
+Because the marketplace connects customers to independent agencies, the platform needs controls for:
 
 - agency verification status
-- listing/vehicle moderation
+- vehicle/listing moderation
 - suspicious activity flags
-- customer/agency dispute workflows
-- marketplace terms acceptance
-- reporting and takedown controls
+- dispute workflows
+- terms acceptance
+- reporting/takedown controls
 
-A marketplace listing must never be interpreted as a guarantee of agency conduct beyond the platform's documented verification level.
+A marketplace listing must never be interpreted as a guarantee beyond the platform's documented verification level.
+
+## Monetization flexibility
+
+Platform monetization is configurable through the private Platform Admin control center.
+
+Possible modes include:
+
+- free SaaS
+- configurable trial
+- paid subscriptions
+- License Keys
+- marketplace commission
+- advertising/sponsored placements
+- hybrid combinations
+
+Agency SaaS payments and customer-to-agency rental payments remain separate financial domains.
 
 ## Core operating loop
 
@@ -150,6 +178,8 @@ A marketplace listing must never be interpreted as a guarantee of agency conduct
 
 - Strong agency operational control, not just online booking.
 - A regional discovery layer that lets customers compare participating agencies/offers.
+- Public agency profiles with clear trust signals and agency-specific fleet listings.
+- First-class map/list discovery and location-aware pickup/delivery workflows.
 - Unified web/mobile operations backed by one authoritative domain model.
 - Fleet profitability and utilization intelligence.
 - First-class pickup/return inspection and damage evidence.
@@ -158,8 +188,9 @@ A marketplace listing must never be interpreted as a guarantee of agency conduct
 - Multi-tenant SaaS design from day one.
 - Arabic, French, and English support with RTL treated as first class.
 - Algeria/Maghreb-ready monetary, location, and payment architecture without hard-coding a single provider.
+- Flexible monetization controlled by the platform owner.
 - AI used for specific operational value: document extraction, damage comparison, forecasting, and decision support.
 
 ## Non-goals for initial release
 
-The project should not attempt to solve every adjacent logistics or mobility problem. GPS/telematics, advanced automated dynamic pricing, external partner ecosystems, a dedicated customer mobile application, and deep AI automation should be architected for future support but only shipped when their prerequisites are stable.
+The project should not attempt to solve every adjacent logistics or mobility problem. GPS/telematics, advanced automated dynamic pricing, external partner ecosystems, a dedicated customer mobile application, deep AI automation, and complex online marketplace settlement can be architected for future support but only shipped when their prerequisites are stable.
