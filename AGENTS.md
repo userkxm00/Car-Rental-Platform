@@ -4,6 +4,25 @@
 
 Act as a senior production software engineer working in a documented, multi-tenant SaaS codebase. Treat repository documentation as the contract for intended behavior.
 
+## Autonomous execution is the default
+
+This repository is designed for autonomous phase-by-phase implementation.
+
+Before implementation, read:
+
+1. `replit.md`
+2. `architecture/architecture-freeze-decision.md`
+3. `architecture/architecture-freeze-status.md`
+4. `agent/AUTONOMOUS_EXECUTION.md`
+5. `agent/MASTER_AUTONOMOUS_PROMPT.md`
+6. `agent/TASK_EXECUTION_STANDARD.md`
+7. `agent/EXECUTION_STATE.md`
+8. `agent/TASK_REGISTRY.md`
+9. `agent/tasks/PHASE-NN.md` for the active phase
+10. relevant docs/architecture/ADRs/skills/references
+
+The agent must normally continue from the current execution pointer without asking the human to choose the next task or phase. Only stop for conditions explicitly classified as `HUMAN DECISION REQUIRED`.
+
 ## Source-of-truth hierarchy
 
 When deciding how the system should behave, use this order:
@@ -19,75 +38,69 @@ When sources conflict, stop and resolve the conflict in documentation/ADR before
 
 ## Required skill loading
 
-Before a task in a covered area, load the relevant project skill(s) under `.agents/skills/`. Multiple skills may apply.
+Before a task in a covered area, load relevant project skills under `.agents/skills/`. Multiple skills may apply.
 
 - Rental business logic → `car-rental-domain`
-- PostgreSQL/PostGIS/schema/query/migration work → `postgres-production`
-- NestJS/backend/API implementation → `nestjs-production`
+- PostgreSQL/PostGIS/schema/query/migration → `postgres-production`
+- NestJS/backend/API → `nestjs-production`
 - API contracts/OpenAPI/DTOs/idempotency/webhooks → `api-contracts`
-- React/Web UI/RTL/accessibility/design → `frontend-design`
+- React/Web/RTL/accessibility/design → `frontend-design` + applicable design/review skills
 - Tests/quality gates → `testing-quality`
-- Maps/geospatial/location work → `maps-postgis`
-- Executing a written phase/task plan → `plan-execution`
-- Importing or reviewing an external skill → `agent-skill-security`
+- Maps/geospatial → `maps-postgis`
+- Mobile operations → `mobile-design-system` + `resilient-mobile-ops`
+- Financial workflows → `financial-auditability`
+- External providers → `integration-connector-architecture`
+- Autonomous plan execution → `plan-execution`
+- External skill/repository review → `agent-skill-security` + `external-reference-registry`
+- POS Global patterns → `pos-global-lessons`
+- Business application UX → `business-application-ux`
 
-Skills supplement, but never override, accepted ADRs, repository security requirements, or source-of-truth product rules.
+Skills supplement, but never override, accepted ADRs, security requirements or product rules.
 
 ## Required behavior before coding
 
-- Read `replit.md` and this file.
-- Load the relevant skills.
-- Read the relevant specification files.
-- Inspect the existing implementation before creating new abstractions.
-- Search for existing domain services, validation, permissions, and reusable components.
-- Identify whether the change affects tenant isolation, authorization, money, booking conflicts, historical records, notifications, or mobile/web contracts.
-- Prefer the smallest coherent change that satisfies the requirement.
+- Inspect existing implementation before creating abstractions.
+- Search for reusable services/components.
+- Identify tenant, authorization, money, booking, concurrency, historical-data, notification and client-contract impact.
+- Prefer the smallest coherent change.
 
 ## Required behavior after coding
 
 - Run focused tests.
-- Run type checking/linting/build validation appropriate to the changed area.
-- Verify migrations and backward compatibility when applicable.
-- Check authorization and tenant isolation for every affected endpoint/action.
-- Update docs/ADRs when behavior or architecture changes.
-- Do not mark a feature complete without its required tests and acceptance criteria.
+- Run typecheck/lint/build where applicable.
+- Verify migrations/backward compatibility.
+- Test authorization and tenant isolation.
+- Perform UI runtime/visual validation when UI changes.
+- Update docs/ADRs for material behavior/architecture changes.
+- Record evidence and execution state.
+- Do not mark a task DONE without acceptance criteria and evidence.
+- Continue automatically to the next task after a successful gate.
 
 ## Security rules
 
-- Never expose secrets in source, logs, tests, fixtures, URLs, or client bundles.
-- Never trust client-supplied tenant IDs, user roles, ownership, prices, payment amounts, or workflow state.
-- Enforce authorization server-side for every protected operation.
-- Scope every tenant-owned query to the authenticated tenant context.
-- Validate uploaded files, document types, and size limits.
-- Sanitize untrusted content at appropriate boundaries.
-- Avoid verbose error messages that leak internal details.
+- Never expose secrets or privileged credentials.
+- Never trust client-supplied tenant IDs, roles, ownership, prices, totals or workflow state.
+- Enforce authorization server-side.
+- Scope tenant-owned reads/writes/exports/jobs.
+- Validate uploaded files and secure private media/document access.
+- Avoid sensitive information in logs/errors.
 
 ## Financial rules
 
-Money must use safe exact representations appropriate to the chosen persistence layer. Avoid binary floating-point for persisted monetary truth. Compute totals server-side and preserve relevant historical snapshots.
+Use exact monetary representation. Calculate authoritative totals server-side. Preserve historical snapshots. Use audited adjustments instead of rewriting financial history.
 
 ## Booking rules
 
-- A vehicle must never have conflicting rental intervals.
-- Operational blocks such as maintenance, inspection, transfer, or manual block can make a vehicle unavailable.
-- State transitions must be explicit and authorized.
-- Time zones must be explicit at boundaries; do not silently mix local branch time with UTC timestamps.
-- Booking creation and payment/availability changes must be transactionally safe where needed.
-
-## API rules
-
-- Keep web and mobile clients behind the same authoritative backend contract unless there is a documented reason otherwise.
-- Reuse shared types/validation where the architecture defines them.
-- Keep domain rules out of presentation-only code.
-- Use idempotency for retry-prone operations where appropriate, especially payments and booking commands.
+- No conflicting active vehicle bookings.
+- Operational blocks can make vehicles unavailable.
+- State transitions are explicit and authorized.
+- Time zone context is explicit.
+- Critical booking/payment/availability operations use safe transaction/concurrency/idempotency patterns.
 
 ## UI rules
 
-- Do not invent new design patterns when an existing design system/component exists.
-- Support Arabic RTL, French, and English deliberately.
-- Every important async operation needs clear loading, success, empty, and error states.
-- Do not conceal destructive actions behind ambiguous labels.
+Use the established design system. Support Arabic RTL, French and English. Important async interactions need loading/empty/success/error states. Validate responsive and RTL/LTR behavior where affected.
 
 ## Reference rules
 
-Use `references/` to learn patterns from audited projects. Never copy branding, proprietary-looking product identity, or large blocks of code. Do not treat a reference repository as our source of truth.
+References are research, not source-of-truth. Do not copy branding, large code blocks or unrelated architecture. External repositories are not runtime dependencies unless a specific approved task requires them.
