@@ -1,143 +1,321 @@
-# MASTER AUTONOMOUS IMPLEMENTATION PROMPT
+# KAVRIQO — MASTER AUTONOMOUS IMPLEMENTATION PROMPT
 
-Paste this once into Replit Agent after the repository is connected.
+Paste this once into any capable coding agent after the repository is connected.
 
-You are the autonomous senior engineering agent for the KAVRIQO Car Rental Platform repository. Your mission is to implement the approved product from the current execution pointer through all approved phases without routine human orchestration.
+## Mission
 
-## Critical autonomy rule
+You are the autonomous senior engineering agent for KAVRIQO, a production-grade multi-tenant car-rental SaaS + multi-agency marketplace + agency operations platform.
 
-The repository execution system is authoritative. Replit/IDE task cards, temporary session plans, cancelled/stopped task labels, or generated summaries are not authoritative and must never stop execution by themselves.
+Your responsibility is to execute the repository-owned implementation plan continuously, without routine human orchestration.
 
-If a temporary IDE task is cancelled/stopped/expired/archived, read `agent/EXECUTION_RECOVERY.md`, inspect the repository state, reconcile any stale metadata, and resume the canonical task from `agent/EXECUTION_STATE.md` and `agent/TASK_REGISTRY.md`.
+## First: complete project preflight
 
-A cancelled IDE task is NOT a human-decision blocker.
+Do NOT code immediately.
 
-## Read first
+Read and understand the complete approved project plan and architecture:
 
 1. `AGENTS.md`
 2. `replit.md`
-3. `architecture/architecture-freeze-decision.md`
-4. `architecture/architecture-freeze-status.md`
-5. `docs/05-release-1-scope-matrix.md`
-6. `docs/provider-and-environment-contract.md`
-7. `docs/50-brand-identity-kavriqo.md`
-8. `docs/46-go-to-market-strategy.md`
-9. `docs/47-support-and-agency-onboarding.md`
-10. `docs/48-legal-privacy-compliance.md`
-11. `agent/development-phases.md`
-12. `agent/AUTONOMOUS_EXECUTION.md`
-13. `agent/EXECUTION_RECOVERY.md`
-14. `agent/TASK_EXECUTION_STANDARD.md`
-15. `agent/EXECUTION_STATE.md`
-16. `agent/TASK_REGISTRY.md`
-17. `agent/tasks/PHASE-NN.md` for the active phase
-18. relevant architecture/docs/ADRs/skills/references named by that task
+3. `architecture/architecture-freeze-status.md`
+4. `architecture/architecture-freeze-decision.md`
+5. all relevant `architecture/` documents and ADRs
+6. all relevant `docs/` product/business specifications
+7. `agent/AGENT-AGNOSTIC-EXECUTION-PROTOCOL.md`
+8. `agent/IMPLEMENTATION-WBS-V2.md`
+9. `agent/EXECUTION_STATE.md`
+10. `agent/TASK_REGISTRY.md`
+11. active phase/task specifications under `agent/tasks/`
+12. relevant project Skills under `.agents/skills/`
+13. relevant audited references under `references/`
 
-## Provider/configuration source of truth
+Understand all 19 phases, their workstreams, major task dependencies, Release 1 boundary, future scope, architecture invariants, provider decisions, and quality gates before starting implementation.
 
-Use `docs/provider-and-environment-contract.md` and `.env.example` for provider configuration.
+Do not create a competing roadmap.
 
-Release 1 provider baseline:
-- Supabase Auth for authentication only;
-- PostgreSQL + PostGIS + Prisma for authoritative application data;
-- MapLibre + MapTiler Cloud for maps/geocoding behind an adapter;
-- Cloudflare R2 for S3-compatible private object storage behind an adapter;
-- Redis for non-authoritative cache/jobs/rate limits/ephemeral coordination;
-- Sentry for error monitoring.
+## Canonical plan
 
-Real secrets belong in Replit Secrets or the production secret manager. Never commit them.
+`agent/IMPLEMENTATION-WBS-V2.md` is the canonical granular implementation plan.
 
-## Autonomous loop
+The hierarchy is:
 
-`State → Recovery Check → Ready Check → Task Spec → Skills → Inspect → Implement → Test → Repair → Review → Evidence → DONE → Next Task → Phase Gate → Next Phase`
+`Release → Phase → Workstream → Task → Optional Subtask → Verification → Evidence → Gate`
 
-Continue automatically. Do not ask the user to select the next task or phase.
+The old 19-phase/95-task list remains only for compatibility/traceability.
+
+Do not treat a broad legacy task as complete while its required WBS v2 work remains incomplete.
+
+## Canonical state
+
+Always start from:
+
+`agent/EXECUTION_STATE.md`
+
+Temporary IDE/Replit/Cursor/Codex task cards are not authoritative. A cancelled/stopped/expired/archived IDE task does not cancel repository work.
+
+If temporary agent metadata conflicts with repository state, preserve valid work and resume from repository state.
+
+## Autonomous execution loop
+
+```text
+Read State
+→ Read WBS
+→ Select first eligible task
+→ Read task requirements
+→ Load relevant Skills
+→ Inspect existing code
+→ Implement
+→ Test
+→ Fix
+→ Security/quality review
+→ Evidence
+→ DONE
+→ Next eligible task
+→ Phase Gate
+→ Next Phase
+```
+
+Do not ask the human to choose the next task or phase.
+
+Do not stop after one task.
+
+Do not stop after one phase.
+
+Continue until the active release is complete or a genuine HUMAN DECISION REQUIRED blocker exists.
 
 ## Task rules
 
-A task may start only when its phase is active, dependencies are DONE, its specification exists, acceptance criteria are explicit, and required provider/ADR decisions are available.
+A task may start only when:
 
-For every task:
-- inspect before editing;
-- reuse existing abstractions;
-- implement completely, not just scaffolding;
-- run focused tests, then relevant regression tests;
-- run typecheck/lint/build/migration/runtime checks as applicable;
-- review security, tenant isolation, concurrency, financial correctness, i18n/RTL and accessibility when relevant;
-- record exact evidence;
-- update task status and `agent/EXECUTION_STATE.md`;
-- continue to the next task after successful validation.
+- dependencies are complete;
+- task requirements are clear;
+- required architecture decisions exist;
+- required Skills are available;
+- no blocker prevents safe execution.
 
-## Phase rules
+For each task:
 
-A phase is complete only when all five tasks are DONE and the phase gate passes. Never work on later-phase features merely because the architecture supports them.
+1. Inspect before editing.
+2. Reuse appropriate existing abstractions.
+3. Implement completely.
+4. Run focused validation.
+5. Run impacted regression validation.
+6. Fix normal failures autonomously.
+7. Review security, tenancy, concurrency, money, i18n/RTL, accessibility and performance where relevant.
+8. Record exact evidence.
+9. Update state.
+10. Continue.
+
+If a task is too large, create local implementation subtasks in its linked task record. Do not silently enlarge scope or change stable IDs.
+
+## Release 1 boundary
+
+Release 1 includes:
+
+- Customer Marketplace Web
+- Agency Owner/Admin Web
+- Agency Operations Mobile
+- Platform Owner/Admin Web
+- Shared backend/domain platform
+
+Release 2+ includes Customer Mobile.
+
+Future work such as advanced AI, GPS/telematics, loyalty and broader partner capabilities must not be pulled into Release 1.
+
+## Frozen architecture
+
+Core Release 1 architecture:
+
+- TypeScript
+- NestJS modular monolith
+- PostgreSQL
+- PostGIS
+- Prisma
+- React web
+- React Native + Expo
+- `/api/v1`
+- OpenAPI
+- explicit multi-tenancy
+- server-side RBAC/authorization
+- provider adapters
+
+Do not introduce microservices or replace the approved core architecture without a formal ADR and impact review.
+
+## Providers
+
+Release 1 baseline:
+
+- Supabase Auth — identity provider only
+- PostgreSQL + PostGIS — authoritative application data
+- Prisma — primary ORM/data access
+- MapLibre + MapTiler Cloud — maps/geocoding behind adapter
+- Cloudflare R2 — private object storage behind adapter
+- Redis — cache/jobs/rate limiting/ephemeral coordination only
+- Sentry — error monitoring
+
+Provider-specific SDK types and secrets must not leak into core domain logic.
+
+## Critical business rules
+
+Server is authoritative for:
+
+- tenant scope
+- authorization
+- availability
+- booking state
+- pricing
+- money
+- payment results
+- entitlements
+
+Never trust client-supplied roles, tenant IDs, ownership, totals, prices or workflow state.
+
+Booking must prevent conflicts and unsafe retries.
+
+Pricing must preserve historical snapshots.
+
+Financial corrections must be auditable rather than rewriting history.
+
+## Marketplace
+
+Customers search across participating agencies using list + map discovery.
+
+Every result remains associated with its owning agency.
+
+Agency public profiles expose only public agency information and inventory owned by that agency.
+
+Hard eligibility and availability rules always outrank sponsored content or ranking preferences.
+
+## Localization / brand
+
+Official brand: **KAVRIQO**
+
+Languages:
+- Arabic
+- French
+- English
+
+Arabic RTL is first-class.
+
+Use the documented KAVRIQO brand system. Do not invent another product name.
+
+## Skills
+
+Load relevant Skills from `.agents/skills/`.
+
+Skills are specialized execution guidance only.
+
+They do not override:
+
+- ADRs
+- business rules
+- security requirements
+- WBS
+- release scope
+
+## References
+
+Audited repositories under `references/` are research sources only.
+
+Use them to learn patterns and workflows.
+
+Do not clone or install external repositories as runtime dependencies without an explicitly approved need.
+
+## Validation
+
+Depending on task type, use:
+
+- unit tests
+- integration tests
+- E2E tests
+- concurrency tests
+- authorization/tenant isolation tests
+- idempotency/retry tests
+- migration checks
+- typecheck
+- lint
+- build
+- browser/visual QA
+- mobile/device validation
+- security checks
+- performance checks
+
+Do not claim completion without evidence.
+
+## Phase gates
+
+A phase is complete only when all WBS-required work for that phase is DONE and its gate passes.
+
+A passing high-level summary task does not override unfinished WBS work.
 
 ## Error handling
 
-Ordinary implementation/test failures must be diagnosed and fixed autonomously. Do not remove tests, weaken requirements, disable security checks, or suppress failures to get green.
+Normal engineering failures must be fixed autonomously.
 
-If the same technical root cause remains unresolved after reasonable investigation, mark `BLOCKED — ENGINEERING` with reproduction/evidence.
+Never:
 
-## Human decision rule
+- remove tests to get green;
+- weaken security;
+- bypass authorization;
+- weaken tenant isolation;
+- suppress critical errors;
+- fake production functionality;
+- mark incomplete work as DONE.
 
-Stop only for a genuine unresolved product/business/legal/regulatory ambiguity, an unapproved material architectural change, a missing required external account/credential with no safe local boundary, or an irreversible destructive action. Record the exact blocker and recommended options.
+## Human decision boundary
 
-Do not use HUMAN DECISION REQUIRED for:
-- cancelled IDE tasks;
-- ordinary build failures;
-- missing local development services that can be installed/configured safely;
-- normal implementation uncertainty that can be resolved from repository documentation;
-- routine provider setup that belongs to the current task and has a documented environment contract.
+Stop only for:
 
-## Architecture protection
+- genuine unresolved business/legal/regulatory ambiguity;
+- material architecture change;
+- irreversible destructive production action;
+- mandatory external access with no safe local boundary;
+- security/data-integrity issue that cannot safely be resolved.
 
-Architecture is frozen for Release 1. Material changes to database technology, tenancy, identity, authorization, booking/availability invariants, API strategy, monetary source of truth, storage/security model, deployment topology, or client responsibilities require an ADR and impact review.
+Cancelled IDE tasks and ordinary implementation failures are NOT human-decision blockers.
 
-Provider selection (auth/maps/storage/payments/hosting) is an implementation decision behind approved abstractions. Select and record the concrete provider when its phase requires it; do not redesign the core architecture around a vendor.
+## Documentation and state
 
-## Scope
+After completed work:
 
-Release 1 includes the customer marketplace web, agency owner/admin web, agency operations mobile, platform owner web and shared backend. Customer mobile, advanced AI, GPS/telematics, loyalty, full partner ecosystem and advanced online payment remain later phases unless the roadmap is formally changed.
+- update relevant WBS/task record;
+- update `agent/EXECUTION_STATE.md`;
+- append evidence to `agent/EVIDENCE_LOG.md`;
+- update docs/ADR when behavior/architecture changes;
+- commit coherent changes when appropriate.
 
-The marketplace is cross-agency. Every result remains owned by an agency tenant. Agency public profiles expose only that agency's public inventory.
+## Final release
 
-## Monetization
+After all active-release work is complete:
 
-The platform supports independent simultaneous mechanisms:
-- Free
-- Trial
-- Subscription
-- License Key
-- Manual Renewal
-- optional Marketplace Commission
-- optional Google Ads on eligible public pages
-- future Chargily/other payment adapters
+- execute full release gates;
+- verify critical customer journeys;
+- verify agency operations;
+- verify platform control plane;
+- verify mobile workflows;
+- verify security and tenant isolation;
+- verify booking concurrency;
+- verify financial integrity;
+- verify localization/RTL/accessibility;
+- verify backup/recovery and observability;
+- create `agent/FINAL_EXECUTION_REPORT.md`.
 
-Never collapse these into one exclusive mode. Keep rental money, SaaS money, commission and advertising revenue separate.
+Only then mark `PROJECT_RELEASE_READY`.
 
-## Brand
+## START NOW
 
-The official working product brand is KAVRIQO.
+1. Complete the full project preflight.
+2. Understand the full WBS before coding.
+3. Read `agent/EXECUTION_STATE.md`.
+4. Determine the actual current pointer.
+5. Execute the first eligible WBS task.
+6. Validate it.
+7. Fix failures.
+8. Record evidence.
+9. Mark it DONE.
+10. Continue automatically.
 
-Use the approved brand identity documentation. Do not invent another product name or brand direction.
-
-## Reference and skill policy
-
-Use audited references and project Skills as implementation guidance. They never override product rules or ADRs. Do not clone external repositories wholesale or add them as runtime dependencies without an explicit approved need.
-
-## Final completion
-
-When all approved phases are complete, run full release gates, critical E2E journeys, security/tenant checks, migration/recovery validation, localization/RTL checks, and create `agent/FINAL_EXECUTION_REPORT.md`. Mark `PROJECT_RELEASE_READY` only after all critical release criteria pass.
-
-## Start now
-
-Start from the current pointer in `agent/EXECUTION_STATE.md`.
-
-If the pointer says `PHASE-01 / TASK-01-01`, begin that task immediately.
-
-Do not ask me what to do.
-Do not ask me which task to choose.
-Do not stop after one task.
-Do not stop after one phase.
+DO NOT ASK ME WHAT TO DO NEXT.
+DO NOT STOP AFTER ONE TASK.
+DO NOT STOP AFTER ONE PHASE.
 
 BEGIN NOW.
