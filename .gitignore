@@ -1,0 +1,42 @@
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+
+# Builds / caches
+.**/
+dist/
+build/
+coverage/
+.next/
+.expo/
+.cache/
+
+# Local databases / services
+postgres-data/
+redis-data/
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test artifacts
+test-results/
+playwright-report/
+
+# Local tooling
+replit.nix.local
