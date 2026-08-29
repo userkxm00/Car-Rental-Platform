@@ -2,93 +2,95 @@
 
 ## Role
 
-Act as a senior production software engineer working in a documented, multi-tenant SaaS codebase. Treat repository documentation as the contract for intended behavior.
+Act as a senior production software engineer working in a documented, multi-tenant SaaS and marketplace codebase. Treat repository documentation as the contract for intended behavior.
 
 ## Autonomous execution is the default
 
-This repository is designed for autonomous phase-by-phase implementation. The human owner should not need to manually orchestrate normal progress.
+This repository is designed for autonomous phase-by-phase implementation by any capable coding agent. The human owner should not need to manually orchestrate normal progress.
 
 Before implementation, read:
 
 1. `replit.md`
 2. `architecture/architecture-freeze-decision.md`
 3. `architecture/architecture-freeze-status.md`
-4. `agent/AUTONOMOUS_EXECUTION.md`
-5. `agent/EXECUTION_RECOVERY.md`
-6. `agent/MASTER_AUTONOMOUS_PROMPT.md`
-7. `agent/TASK_EXECUTION_STANDARD.md`
-8. `agent/EXECUTION_STATE.md`
-9. `agent/TASK_REGISTRY.md`
-10. `agent/tasks/PHASE-NN.md` for the active phase
-11. relevant docs/architecture/ADRs/skills/references
+4. `agent/AGENT-AGNOSTIC-EXECUTION-PROTOCOL.md`
+5. `agent/IMPLEMENTATION-WBS-V2.md`
+6. `agent/EXECUTION_STATE.md`
+7. `agent/TASK_REGISTRY.md`
+8. the active phase/task specifications under `agent/tasks/`
+9. relevant docs/architecture/ADRs/skills/references
 
-The agent must normally continue from the current execution pointer without asking the human to choose the next task or phase. Only stop for conditions explicitly classified as `HUMAN DECISION REQUIRED`.
+## Canonical planning hierarchy
 
-## External IDE task state is not authoritative
+```text
+Product / Business Truth
+→ Architecture / ADRs
+→ Release Scope
+→ IMPLEMENTATION-WBS-V2.md
+→ Phase
+→ Workstream
+→ Task
+→ Optional Subtask
+→ Verification
+→ Evidence
+→ Gate
+→ Next eligible work
+```
 
-Replit/IDE task cards and session-local agent state do not control this repository plan.
+`agent/IMPLEMENTATION-WBS-V2.md` is the canonical granular implementation plan. It supersedes the assumption that five broad tasks per phase are sufficient.
 
-A temporary task marked cancelled, stopped, expired, archived or unavailable is NOT by itself a blocker.
+The legacy 19-phase / 95-task registry remains for compatibility and traceability. A legacy parent task is not complete while required WBS v2 child work remains incomplete.
 
-When such a condition occurs, follow `agent/EXECUTION_RECOVERY.md`, reconcile the repository state, preserve valid partial work, and resume the canonical task from `EXECUTION_STATE.md` / `TASK_REGISTRY.md`.
+## IDE task state is not authoritative
 
-## Source-of-truth hierarchy
+Replit, Cursor, Codex, Claude Code, Gemini, or another IDE/agent queue may contain temporary tasks. A task marked cancelled, stopped, expired, archived, or interrupted there does not cancel repository work.
 
-When deciding how the system should behave, use this order:
-
-1. Accepted architecture decisions and security requirements
-2. Product and business-rule specifications under `docs/`
-3. Current validated implementation and tests
-4. Project skills under `.agents/skills/`
-5. Audited references under `references/`
-6. External assumptions only when explicitly documented
-
-When sources conflict, resolve them against the authoritative repository documents. Stop only when a genuine `HUMAN DECISION REQUIRED` condition exists.
+Recover from `agent/EXECUTION_STATE.md` and the canonical WBS.
 
 ## Required skill loading
 
-Before a task in a covered area, load relevant project skills under `.agents/skills/`. Multiple skills may apply.
+Load relevant project skills under `.agents/skills/` before covered work.
 
 - Rental business logic → `car-rental-domain`
 - PostgreSQL/PostGIS/schema/query/migration → `postgres-production`
 - NestJS/backend/API → `nestjs-production`
 - API contracts/OpenAPI/DTOs/idempotency/webhooks → `api-contracts`
-- React/Web/RTL/accessibility/design → `frontend-design` + applicable design/review skills
+- Web/design/accessibility/RTL → applicable frontend/design skills
 - Tests/quality gates → `testing-quality`
 - Maps/geospatial → `maps-postgis`
 - Mobile operations → `mobile-design-system` + `resilient-mobile-ops`
 - Financial workflows → `financial-auditability`
 - External providers → `integration-connector-architecture`
-- Autonomous plan execution → `plan-execution`
-- External skill/repository review → `agent-skill-security` + `external-reference-registry`
+- Plan execution → `plan-execution`
+- External reference review → `agent-skill-security` + `external-reference-registry`
 - POS Global patterns → `pos-global-lessons`
 - Business application UX → `business-application-ux`
 
-Skills supplement, but never override, accepted ADRs, security requirements or product rules.
+Skills supplement but never override accepted ADRs, security requirements, or product rules.
 
 ## Required behavior before coding
 
-- Inspect existing implementation before creating abstractions.
-- Search for reusable services/components.
-- Identify tenant, authorization, money, booking, concurrency, historical-data, notification and client-contract impact.
-- Prefer the smallest coherent change.
+- inspect existing implementation;
+- search for reusable abstractions;
+- identify tenant, authorization, money, booking, concurrency, historical-data, notification and client-contract impact;
+- respect the active release boundary;
+- prefer the smallest coherent change.
 
 ## Required behavior after coding
 
-- Run focused tests.
-- Run typecheck/lint/build where applicable.
-- Verify migrations/backward compatibility.
-- Test authorization and tenant isolation.
-- Perform UI runtime/visual validation when UI changes.
-- Update docs/ADRs for material behavior/architecture changes.
-- Record evidence and execution state.
-- Do not mark a task DONE without acceptance criteria and evidence.
-- Continue automatically to the next task after a successful gate.
+- run focused tests;
+- run typecheck/lint/build where applicable;
+- verify migrations/backward compatibility;
+- test authorization and tenant isolation;
+- perform UI/mobile runtime and visual validation when relevant;
+- update docs/ADRs for material changes;
+- record evidence and execution state;
+- continue automatically to the next eligible WBS task after successful validation.
 
 ## Security rules
 
 - Never expose secrets or privileged credentials.
-- Never trust client-supplied tenant IDs, roles, ownership, prices, totals or workflow state.
+- Never trust client-supplied tenant IDs, roles, ownership, prices, totals, or workflow state.
 - Enforce authorization server-side.
 - Scope tenant-owned reads/writes/exports/jobs.
 - Validate uploaded files and secure private media/document access.
@@ -112,4 +114,4 @@ Use the established KAVRIQO design system. Support Arabic RTL, French and Englis
 
 ## Reference rules
 
-References are research, not source-of-truth. Do not copy branding, large code blocks or unrelated architecture. External repositories are not runtime dependencies unless a specific approved task requires them.
+References are research, not source-of-truth. Do not copy branding, large code blocks, or unrelated architecture. External repositories are not runtime dependencies unless a specific approved task requires them.
