@@ -4,18 +4,18 @@ This file is the persistent checkpoint for autonomous implementation.
 
 ## Status
 
-- Overall: `READY_TO_START`
+- Overall: `IN_PROGRESS`
 - Current phase: `PHASE-01`
-- Current workstream: `01-A Runtime Foundation`
-- Current task: `01-A01`
-- Last completed task: none
+- Current workstream: `01-B Supabase Identity Boundary`
+- Current task: `01-B01 Define Auth provider adapter interface`
+- Last completed task: `01-A10 Verify clean development boot and document evidence` (workstream `01-A Runtime Foundation` COMPLETE)
 - Last completed phase: `PHASE-00`
-- Current attempt: `0`
-- Last validation: repository planning and execution-system audit
-- Last known good commit: `062d2f6f9f2b09f643c36e6a601da0236037690f`
+- Current attempt: `1`
+- Last validation: clean-clone full pipeline (npm ci, typecheck, build, lint, unit 35/35, e2e 13/13, boot, ready=200) — 2026-08-30
+- Last known good commit: `4ecc3b8`
 - Blocker: none
-- Next action: execute `01-A01`
-- Last updated: 2026-08-29
+- Next action: execute `01-B01` then continue the 01-B workstream (adapter interface → Supabase token verification boundary → identity mapping/provisioning → disabled identity handling → flow boundaries → integration tests)
+- Last updated: 2026-08-30
 
 ## Canonical execution model
 

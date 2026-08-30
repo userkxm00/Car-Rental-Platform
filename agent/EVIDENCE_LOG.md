@@ -28,3 +28,241 @@ Append one checkpoint per completed task or phase gate.
 - Evidence: `architecture/architecture-freeze-status.md`, `agent/TASK_REGISTRY.md`, `agent/tasks/PHASE-01.md`, `agent/TASK_EXECUTION_STANDARD.md`
 - Implementation tests: none yet; no implementation task has started.
 - Remaining risks: concrete third-party provider choices are selected inside their relevant implementation tasks behind approved adapters; legal/business policies remain subject to qualified review before production activation.
+
+## Checkpoint: 01-A01 — Workspace/package manager conventions
+
+- Task: `PHASE-01 / 01-A / 01-A01`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: npm-workspaces monorepo initialized per `architecture/monorepo-structure.md`; 13 `@kavriqo/*` workspaces (5 Release 1 apps + 8 shared packages); pinned packageManager/engines; strict `tsconfig.base.json`; `.npmrc` engine-strict; `.editorconfig`; conventions documented.
+- Files changed: root `package.json`, `package-lock.json`, `.npmrc`, `.editorconfig`, `tsconfig.base.json`, 13 workspace `package.json`, `architecture/monorepo-structure.md`, `README.md`, `agent/EXECUTION_STATE.md`, `agent/tasks/01-A-RUNTIME-FOUNDATION.md`, `agent/EVIDENCE_LOG.md`
+- Commands run: `npm install` (clean, 297ms); `npm ls --workspaces --depth=0` (13 workspace symlinks resolved); `npm run dev|build|typecheck|lint|test` (all delegate via `--if-present`, exit 0); `npm pkg get engines packageManager`
+- Build/type/lint results: n/a (no code yet — tooling tasks 01-A07/01-A08 follow)
+- Security/tenant checks: no secrets introduced; `.env` gitignored per existing rules
+- Commit: `53d4dca`
+- Remaining risks: none for this unit
+
+## Checkpoint: 01-A02 — NestJS application shell
+
+- Task: `PHASE-01 / 01-A / 01-A02`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `apps/api` NestJS 11 shell (main.ts, AppModule, nest-cli, strict tsconfig); global `/api` prefix + URI versioning; 0.0.0.0:4000 binding; graceful shutdown.
+- Files changed: `apps/api/{package.json,tsconfig.json,tsconfig.build.json,nest-cli.json,src/main.ts,src/app.module.ts}`
+- Commands run: `npm run typecheck` (0), `npm run build` (0), `node dist/main.js` + curl `/api/v1/*` (404 envelope)
+- Security/tenant checks: none applicable (no business endpoints yet)
+- Commit: `a1cc0a2`
+
+## Checkpoint: 01-A03 — Environment schema & startup validation
+
+- Task: `PHASE-01 / 01-A / 01-A03`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `packages/config` zod schema for the full `.env.example` contract; fail-fast `loadEnvSchema`; `assertProductionRequirements` production guard; names-only error messages.
+- Files changed: `packages/config/*`
+- Commands run: build (0); smoke scenarios (valid/invalid/missing/production/no-leak) all pass; unit coverage added in 01-A07 per WBS ordering
+- Security checks: secret values never appear in error output (verified programmatically)
+- Commit: `5dbcdf7`
+
+## Checkpoint: 01-A04 — Configuration module & secret boundaries
+
+- Task: `PHASE-01 / 01-A / 01-A04`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: global typed `APP_ENV` token; bootstrap fail-fast validation; optional local `.env` preload (provider-neutral injection otherwise); deterministic workspace build order.
+- Files changed: `apps/api/src/config/*`, `apps/api/src/main.ts`, `apps/api/src/app.module.ts`
+- Commands run: 3 fail-fast boot scenarios exit 1 with names-only messages; leak-count check = 0; valid boot logs listening line
+- Commit: `a6e72b6`
+
+## Checkpoint: 01-A05 — /api/v1 routing baseline
+
+- Task: `PHASE-01 / 01-A / 01-A05`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: documented error envelope + stable codes; global exception filter; version gating behavior verified.
+- Files changed: `apps/api/src/common/errors/*`, `apps/api/src/main.ts`
+- Commands run: curl matrix (v1 unknown, v2, /api, /, trailing slash) → 404 envelope; requestId echo
+- Commit: `b74e6e1`
+
+## Checkpoint: 01-A06 — Health/readiness endpoints
+
+- Task: `PHASE-01 / 01-A / 01-A06`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `/health/live` + `/health/ready` with bounded PostgreSQL probe; DB outage degrades readiness (pool error listener fixed a process-crash bug found in runtime testing); intentional 5xx payloads preserved by the filter.
+- Files changed: `apps/api/src/health/*`, `apps/api/src/common/errors/api-exception.filter.ts`
+- Commands run: live=200 while DB down (process survives); ready=200 with PostgreSQL 18.4 up; ready=503 `{code:SERVICE_UNAVAILABLE,details:{database:down}}` with DB down
+- Commit: `635bf10`
+
+## Checkpoint: 01-A07 — Test runner & conventions
+
+- Task: `PHASE-01 / 01-A / 01-A07`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: jest/ts-jest per workspace; `app.setup.ts` shared wiring (production=e2e shape); env-schema (11), exception-filter (6), health e2e (5), errors e2e (4) suites; `TESTING.md`.
+- Commands run: unit 17/17; e2e 9/9 against real PostgreSQL 18.4 + degraded APP_ENV override
+- Commit: `e962978`
+
+## Checkpoint: 01-A08 — Lint/typecheck/build tooling
+
+- Task: `PHASE-01 / 01-A / 01-A08`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: ESLint 9 flat config (type-aware + security plugin), Prettier conventions, per-package eslint tsconfigs, strict async rules.
+- Commands run: lint 0 errors; format:check clean; typecheck 0; build 0; unit 17/17; e2e 9/9
+- Commit: `0023f13`
+
+## Checkpoint: 01-A09 — Structured logging & correlation ID
+
+- Task: `PHASE-01 / 01-A / 01-A09`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: AsyncLocalStorage request context; CorrelationMiddleware (validated inbound ID, UUID fallback, header echo); StructuredLogger (JSON in prod/staging/test, redaction, cycle-safe); access-log interceptor; requestId in 5xx logs and envelopes.
+- Files changed: `apps/api/src/common/observability/*`, `apps/api/src/app.setup.ts`, `apps/api/src/main.ts`, `apps/api/test/observability.e2e-spec.ts`
+- Commands run: unit 35/35; e2e 13/13; staging boot 9/9 parseable JSON lines; header echo + UUID generation via curl
+- Security checks: inbound request-ID charset/length validated (log injection); sensitive keys redacted
+- Commit: `0c596f9`
+
+## Checkpoint: 01-A10 — Clean development boot & evidence
+
+- Task: `PHASE-01 / 01-A / 01-A10` — closes workstream `01-A`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: fresh `git clone` of committed state: `npm ci` → typecheck 0 → build 0 → lint 0 → unit 35/35 → e2e 13/13 → boot on PORT 4010 → `/health/ready` 200 with structured JSON logs.
+- Commands run: full pipeline above (clone at commit `0c596f9`)
+- Remaining risks: none; sandbox-local PostgreSQL is `embedded-postgres` (npm-bundled binaries) because the environment blocks apt/Docker registries — the canonical containerized `docker-compose.yml` baseline will be committed with 01-C01.
+
+## Workstream result
+
+`PHASE-01 / 01-A Runtime Foundation` — **COMPLETE** (01-A01…01-A10). All 10 WBS tasks DONE with evidence; workstream acceptance criteria met (reproducible monorepo, bootable API on /api/v1, env validation, health endpoints, tests, lint/typecheck/build, correlation logging).
+
+## Checkpoint: 01-A02 — NestJS application shell
+
+- Task: `PHASE-01 / 01-A / 01-A02`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `apps/api` NestJS 11 application shell (main.ts, AppModule, nest-cli, strict tsconfigs). Boots on 0.0.0.0:4000, global `/api` prefix + URI versioning `v1`, graceful shutdown, bootstrap log. Health endpoints deferred to 01-A06; no DB dependency yet.
+- Commands run: `npm run typecheck` (0), `npm run build` (0); booted `dist/main.js`, `curl /api/v1/*` → Nest 404 JSON envelope.
+- Commit: `a1cc0a2`
+
+## Checkpoint: 01-A03 — Environment schema & startup validation
+
+- Task: `PHASE-01 / 01-A / 01-A03`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `packages/config` zod schema covering the complete `.env.example` contract (runtime, Postgres, Supabase Auth, MapTiler, R2, Redis, Sentry, encryption key, messaging modes, payments, locale/currency, queue). `loadEnvSchema` (fail-fast, names-only errors), `assertProductionRequirements` (phase-aware required secrets: DATABASE_URL, SUPABASE_URL, SUPABASE_JWT_ISSUER, APP_ENCRYPTION_KEY).
+- Verification: smoke scenarios (valid dev defaults, invalid postgres URL rejected without value echo, missing required var, production guard, complete production env, secret value never appears in error output) — all passed before commit; jest unit coverage added in 01-A07 per WBS ordering.
+- Commit: `5dbcdf7`
+
+## Checkpoint: 01-A04 — Configuration module & secret boundaries
+
+- Task: `PHASE-01 / 01-A / 01-A04`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: Global typed `APP_ENV` DI token provided by `ConfigModule` (zod + production requirements at bootstrap; abort on invalid). Optional `.env` preload for local dev (workspace root or API root; real environments inject through their own secure mechanism). `tsBuildInfoFile` moved inside `dist` so clean builds are truly clean; api workspace pre-scripts build `@kavriqo/config` deterministically.
+- Verification: 3 fail-fast boot scenarios (invalid DATABASE_URL / production missing secrets / missing DATABASE_URL) exit 1 with names-only messages; leak-count of a sentinel secret = 0; valid boot logs listening line.
+- Commit: `a6e72b6`
+
+## Checkpoint: 01-A05 — /api/v1 routing baseline
+
+- Task: `PHASE-01 / 01-A / 01-A05`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: Global `ApiExceptionFilter` producing the documented `{error:{code,message,details?,requestId?}}` envelope; stable code map (VALIDATION_FAILED/UNAUTHORIZED/FORBIDDEN/NOT_FOUND/CONFLICT/RATE_LIMITED/INTERNAL_ERROR + app-provided codes); 5xx masking for unexpected errors (logged server-side with requestId); `X-Request-ID` echoed.
+- Verification: curl matrix — /api/v1/unknown, /api/v2/unknown (no v1 fallback), /api, /, trailing slash → 404 envelope; requestId echo verified.
+- Commit: `b74e6e1`
+
+## Checkpoint: 01-A06 — Health/readiness endpoints
+
+- Task: `PHASE-01 / 01-A / 01-A06`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `GET /api/v1/health/live` (process liveness, no external dependency) and `GET /api/v1/health/ready` (bounded 2s PostgreSQL probe via minimal pg pool; `database:up/down`). Public endpoints by design. Runtime testing found and fixed a pg pool unhandled-error crash on DB outage (pool 'error' listener); exception filter now preserves intentional 5xx payloads while masking unexpected ones.
+- Verification (live process): live=200 while DB down and process survives; ready=200 with PostgreSQL 18.4 up; ready=503 `{code:SERVICE_UNAVAILABLE, details:{database:down}}` with DB down.
+- Commit: `635bf10`
+
+## Checkpoint: 01-A07 — Test runner & conventions
+
+- Task: `PHASE-01 / 01-A / 01-A07`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: jest/ts-jest per workspace (`@kavriqo/config`, `@kavriqo/api` unit + e2e configs); `TESTING.md` conventions (DB suites must use a real PostgreSQL, no DB mocking for constraint proofs; never weaken tests). `app.setup.ts` extracted so e2e boots the exact production wiring. Suites: env-schema (11), exception-filter (6), health e2e (5), errors e2e (4). Fixed jest rootDir module-mapping and `@kavriqo/config` resolution.
+- Verification: unit 17/17; e2e 9/9 against real PostgreSQL 18.4 + degraded-mode suite via APP_ENV override.
+- Commit: `e962978`
+
+## Checkpoint: 01-A08 — Lint/typecheck/build tooling
+
+- Task: `PHASE-01 / 01-A / 01-A08`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: ESLint 9 flat config (type-aware typescript-eslint + eslint-plugin-security with documented false-positive scoping, prettier integration), `.prettierrc.json`, per-package `tsconfig.eslint.json`, strict async rules (`no-floating-promises`, `no-misused-promises`), lint scripts per workspace, root `test:e2e` delegation. Typed e2e supertest helper via unknown-narrowing.
+- Verification: lint 0 errors; format:check clean; typecheck 0; build 0; unit 17/17; e2e 9/9.
+- Commit: `0023f13`
+
+## Checkpoint: 01-A09 — Structured logging & correlation ID
+
+- Task: `PHASE-01 / 01-A / 01-A09`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `CorrelationMiddleware` (validated inbound X-Request-ID, bounded charset/length — log-injection safe; UUID fallback; response header echo), `AsyncLocalStorage` request context, `StructuredLogger` (JSON lines in production/staging/test, human-readable in dev; recursive sensitive-key redaction; cycle-safe; error serialization), `RequestLoggingInterceptor` (access logs with duration/status/requestId; health probes excluded), requestId on 5xx server logs and error envelopes. `main.ts` uses StructuredLogger.
+- Verification: unit 35/35 incl. logger redaction/parse tests; e2e 13/13 incl. correlation header tests; staging boot log 9/9 lines parseable JSON; curl-verified header echo + UUID generation.
+- Commit: `0c596f9`
+
+## Checkpoint: 01-A10 — Clean development boot & evidence
+
+- Task: `PHASE-01 / 01-A / 01-A10` (closes workstream `01-A`)
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: fresh `git clone` of the committed tree → `npm ci` (677 packages) → typecheck 0 → build 0 → lint 0 → unit 35/35 → e2e 13/13 (real PostgreSQL 18.4 instance running) → booted on PORT 4010: `/api/v1/health/live` 200, `/api/v1/health/ready` 200, structured JSON log output.
+- Notes: sandbox has no Docker/apt registry access; local PostgreSQL for verification is provided by the `embedded-postgres` npm package (real PostgreSQL 18.4 binaries bundled in npm — no mock). The canonical containerized `docker-compose.yml` baseline will be added with 01-C01 (DB tooling), as planned.
+- Commit: n/a (verification of `0c596f9`; evidence appended in `4ecc3b8`)
+
+## Workstream result
+
+`PHASE-01 / 01-A Runtime Foundation` — **COMPLETE** (01-A01…01-A10). All 10 WBS tasks DONE with evidence; workstream acceptance criteria met (reproducible monorepo, bootable API on /api/v1, env validation, health endpoints, tests, lint/typecheck/build, correlation logging).
+
+## Checkpoint: 01-B01…B05 — Supabase identity boundary
+
+- Task: `PHASE-01 / 01-B / 01-B01…01-B05`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `AuthProvider` port (abstract DI token) with `VerifiedPrincipal`, capability flags, fail-closed `AuthFailureError` taxonomy (TOKEN_MISSING/TOKEN_INVALID/TOKEN_EXPIRED/PROVIDER_UNAVAILABLE); `SupabaseAuthProvider` — JWKS/RS256 verification via `jose` remote JWK set (cooldown 30s, 5s timeout), issuer+audience enforced, `aal` surfaced, provider metadata never exported as authorization; `AuthGuard` (global APP_GUARD) with `@Public()` opt-out and `@AuthPrincipal()` decorator; stable 401/503 code mapping; `IdentityStore` port + in-memory transitional store (Prisma implementation in 01-C); `IdentityResolutionService` — unknown subject provisioning (verified claims only, idempotent), SUSPENDED/DEACTIVATED → 403 USER_DISABLED.
+- Verification: unit 56/56 (guard matrix incl. fail-closed principal non-attachment, identity lifecycle, port contract); health endpoints remain public (@Public).
+- Security notes: no provider metadata consumed for authorization; no secrets in logs/errors; unexpected verification failures degrade to 503, never grant.
+- Commit: `e74a001`
+
+## Checkpoint: 01-B06…B10 — Auth flow contracts & integration tests
+
+- Task: `PHASE-01 / 01-B / 01-B06…01-B10` (closes workstream `01-B`)
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `architecture/auth-flow-contracts.md` (INVARIANT-tagged flow boundaries: sign-in, email verification, password recovery, MFA, disabled/deleted identities, provider outage semantics, token requirements); `SUPABASE_JWKS_URL` env override + production TLS enforcement for provider endpoints; local JWKS test server (jose RS256 keypair) exercising the real verification path end-to-end via supertest/HTTP.
+- Verification: e2e 21/21 (8 new: valid-token 200 principal echo, missing 401, tampered signature 401 TOKEN_INVALID, expired 401 TOKEN_EXPIRED, wrong issuer 401, wrong audience 401, health public, requestId on auth errors). All suites run against real sockets — no external network.
+- Commit: `ae6560a`
+
+## Workstream result
+
+`PHASE-01 / 01-B Supabase Identity Boundary` — **COMPLETE**. Domain code has zero Supabase SDK/type imports outside `auth/infrastructure/`; every route decision is signature-verified; provider failures are controlled (401/503, no 500 leaks); flow boundaries documented.
+
+## Checkpoint: 01-C01 — Users migration + Prisma tooling
+
+- Task: `PHASE-01 / 01-C / 01-C01`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `prisma/schema.prisma` (User + UserIdentity, composite unique provider link, cascade); `prisma/migrations/0001_init` (engine-generated SQL + documented login-identifier invariant note) + migration_lock; `prisma.config.ts` (JS schema engine + `@prisma/adapter-pg`); offline client generator (`apps/api/scripts/prisma-generate.cjs`); migration-create script + prev-schema snapshot; `patches/` (patch-package) for upstream prisma/prisma#27403 (pg catalog OIDs 18/19). Local PostgreSQL 17.10 via embedded-postgres npm binaries (UTF-8 initdb) — engine-introspection limitation documented in TESTING.md.
+- Verification: `migrate deploy` applied + `migrate status` up-to-date; PrismaClient CRUD — composite-unique P2002, SUSPENDED lifecycle, cascade delete.
+- Commit: `149f162`
+
+## Checkpoint: 01-C02…C08 — User repository / lifecycle / preferences / profile / consistency
+
+- Task: `PHASE-01 / 01-C / 01-C02…01-C08` (closes workstream `01-C`)
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: PrismaService (pg adapter); UserRepository (provisioning from verified claims only, idempotent, transactional user+link); PrismaIdentityStore behind the 01-B port; IdentityResolutionService in IdentityModule; GET/PATCH /api/v1/me with strict validation; 409 EMAIL_TAKEN; SUSPENDED/DEACTIVATED → 403 USER_DISABLED; subject-consistency by composite unique + idempotency. Login-identifier invariant corrected (identity link, not email/phone CHECK) and migration amended.
+- Verification: unit 56/56 (profile service 11 new); e2e 30/30 (identity integration 9 new over real PostgreSQL + JWKS: provisioning, idempotency, unverified-claim invariant, subject consistency, email conflict, PATCH validation, 401/403, preference persistence).
+- Security notes: never provisions from unverified claims; email/phone never settable via API; own-profile-only resolution server-side.
+- Commit: `7f6b2e3`
+
+## Workstream result
+
+`PHASE-01 / 01-C User Identity` — **COMPLETE** (01-C01…01-C08). Users migrate through the standard Prisma flow; identity is database-backed behind the provider-neutral boundary; lifecycle and preferences are enforced server-side; uniqueness and provider-link consistency are verified against a real database.
