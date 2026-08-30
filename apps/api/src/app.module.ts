@@ -4,6 +4,7 @@ import { AuthorizationModule } from './authorization/authorization.module';
 import { ConfigModule } from './config/config.module';
 import { HealthModule } from './health/health.module';
 import { IdentityModule } from './identity/identity.module';
+import { LocationsModule } from './locations/locations.module';
 import { MembershipsModule } from './memberships/memberships.module';
 import { TenantsModule } from './tenants/tenants.module';
 
@@ -22,6 +23,7 @@ import { TenantsModule } from './tenants/tenants.module';
     AuthorizationModule,
     TenantsModule,
     MembershipsModule,
+    LocationsModule,
     HealthModule,
   ],
 })

@@ -96,6 +96,9 @@ model Tenant {
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   memberships       Membership[]
+  locations         Location[]
+  branches          Branch[]
+  deliveryZones     DeliveryZone[]
 
   @@map("tenants")
 }
@@ -140,4 +143,120 @@ model MembershipRole {
 
   @@unique([membershipId, role])
   @@map("membership_roles")
+}
+
+enum BranchStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum LocationType {
+  BRANCH
+  AIRPORT
+  HOTEL
+  PARKING
+  PICKUP_POINT
+  CUSTOM
+}
+
+/// Canonical location entity (architecture/database-schema-v1.md §3).
+/// tenantId null = platform/global location. The PostGIS geometry column is
+/// added with the spatial search phase via the documented SQL adapter
+/// boundary; lat/lng columns serve the display fallback.
+model Location {
+  id             String                 @id @default(uuid()) @db.Uuid
+  tenantId       String?                @db.Uuid
+  type           LocationType           @default(CUSTOM)
+  name           String
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  region         String?
+  postalCode     String?
+  countryCode    String                 @default("DZ")
+  latitude       Float?
+  longitude      Float?
+  providerName   String?
+  providerPlaceId String?
+  metadata       Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  tenant         Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branches       Branch[]
+  hours          LocationHours[]
+  hourExceptions LocationHourException[]
+
+  @@index([tenantId])
+  @@map("locations")
+}
+
+/// Branch (architecture/database-schema-v1.md §3). Code is unique within a
+/// tenant; the referenced location must be global or owned by the same
+/// tenant (enforced by the branches service, 02-C03).
+model Branch {
+  id         String       @id @default(uuid()) @db.Uuid
+  tenantId   String       @db.Uuid
+  name       String
+  code       String
+  locationId String       @db.Uuid
+  status     BranchStatus @default(ACTIVE)
+  timezone   String?
+  contacts   Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location   Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, code])
+  @@index([locationId])
+  @@map("branches")
+}
+
+/// Recurring operating hours (02-C04). dayOfWeek: 0=Monday…6=Sunday.
+model LocationHours {
+  id         String   @id @default(uuid()) @db.Uuid
+  locationId String   @db.Uuid
+  dayOfWeek  Int
+  opensAt    String
+  closesAt   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, dayOfWeek])
+  @@map("location_hours")
+}
+
+/// Exception hours overriding the recurring pattern for a specific date
+/// (02-C05). Both opensAt/closesAt null = closed for the day.
+model LocationHourException {
+  id         String   @id @default(uuid()) @db.Uuid
+  locationId String   @db.Uuid
+  date       DateTime @db.Date
+  opensAt    String?
+  closesAt   String?
+  reason     String?
+  createdAt  DateTime @default(now())
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, date])
+  @@map("location_hour_exceptions")
+}
+
+/// Delivery zone baseline (02-C08). The polygon geometry arrives with the
+/// spatial search phase (SQL adapter boundary); the fee policy reference
+/// points into the pricing engine when it lands.
+model DeliveryZone {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  name              String
+  active            Boolean  @default(true)
+  feePolicyReference String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("delivery_zones")
 }
