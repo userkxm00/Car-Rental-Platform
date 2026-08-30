@@ -129,4 +129,12 @@ export class MembershipsController {
     const row = await this.service.decline(userId, membershipId);
     return toResponse(row);
   }
+
+  /** The caller's own memberships — the agency context picker for clients. */
+  @Get('me/memberships')
+  async myMemberships(@AuthPrincipal() principal: VerifiedPrincipal): Promise<unknown> {
+    const userId = await this.identity.resolve(principal);
+    const rows = await this.service.listForUser(userId);
+    return { memberships: rows.map(toResponse) };
+  }
 }

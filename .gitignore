@@ -22,6 +22,8 @@ coverage/
 # Local databases / services
 postgres-data/
 redis-data/
+apps/api/.pgdata/
+apps/agency-web/.dev-token
 
 # Logs
 *.log

@@ -99,6 +99,8 @@ model Tenant {
   locations         Location[]
   branches          Branch[]
   deliveryZones     DeliveryZone[]
+  vehicleCategories VehicleCategory[]
+  vehicles          Vehicle[]
 
   @@map("tenants")
 }
@@ -259,4 +261,144 @@ model DeliveryZone {
 
   @@index([tenantId])
   @@map("delivery_zones")
+}
+
+/// Vehicle category (architecture/database-schema-v1.md §4
+/// vehicle_categories). Localized name/description fields cover ar/fr/en
+/// (03-A06); the fallback name is required.
+model VehicleCategory {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String            @db.Uuid
+  name             String
+  nameAr           String?
+  nameFr           String?
+  code             String
+  description      String?
+  descriptionAr    String?
+  descriptionFr    String?
+  transmission     String?
+  fuelType         String?
+  seats            Int?
+  doors            Int?
+  luggageCapacity  Int?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicles         Vehicle[]
+  features         CategoryFeature[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("vehicle_categories")
+}
+
+/// Per-category feature assignments from the versioned feature catalog
+/// (apps/api/src/fleet/domain/feature-catalog.ts, 03-A03).
+model CategoryFeature {
+  id         String          @id @default(uuid()) @db.Uuid
+  categoryId String          @db.Uuid
+  featureKey String
+  category   VehicleCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, featureKey])
+  @@map("category_features")
+}
+
+/// Vehicle (architecture/database-schema-v1.md §4 vehicles).
+model Vehicle {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  categoryId      String           @db.Uuid
+  currentBranchId String?          @db.Uuid
+  make            String
+  model           String
+  year            Int
+  plateNumber     String
+  vin             String?
+  color           String?
+  status          VehicleStatus    @default(AVAILABLE)
+  acquisitionDate DateTime?        @db.Date
+  acquisitionCost Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category        VehicleCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  odometer        OdometerReading[]
+  images          VehicleImage[]
+  documents       VehicleDocument[]
+
+  @@unique([tenantId, plateNumber])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([currentBranchId])
+  @@map("vehicles")
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RESERVED
+  RENTED
+  MAINTENANCE
+  INSPECTION
+  ARCHIVED
+}
+
+enum VehicleDocumentType {
+  REGISTRATION
+  INSURANCE
+  INSPECTION_CERTIFICATE
+  CUSTOMS
+  OTHER
+}
+
+/// Private vehicle gallery image (03-C04/05). Binary content lives in object
+/// storage (Cloudflare R2); only the object key and metadata are stored here.
+/// Access is exclusively through signed URLs (03-C08).
+model VehicleImage {
+  id             String   @id @default(uuid()) @db.Uuid
+  vehicleId      String   @db.Uuid
+  objectKey      String   @unique
+  contentType    String
+  sizeBytes      Int
+  checksumSha256 String?
+  position       Int      @default(0)
+  isPrimary      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, position])
+  @@map("vehicle_images")
+}
+
+/// Private vehicle document (03-C06/07). Same private-object policy as
+/// images; expiry rules are enforced server-side.
+model VehicleDocument {
+  id          String              @id @default(uuid()) @db.Uuid
+  vehicleId   String              @db.Uuid
+  type        VehicleDocumentType
+  title       String
+  objectKey   String              @unique
+  contentType String
+  sizeBytes   Int
+  issuedAt    DateTime?           @db.Date
+  expiresAt   DateTime?           @db.Date
+  createdAt   DateTime            @default(now())
+  vehicle     Vehicle             @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@map("vehicle_documents")
+}
+
+/// Odometer/fuel reading records (03-B05/06).
+model OdometerReading {
+  id        String   @id @default(uuid()) @db.Uuid
+  vehicleId String   @db.Uuid
+  odometerKm Int
+  fuelLevelPercent Int?
+  recordedAt DateTime @default(now())
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, recordedAt])
+  @@map("odometer_readings")
 }

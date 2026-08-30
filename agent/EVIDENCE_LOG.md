@@ -349,3 +349,52 @@ Append one checkpoint per completed task or phase gate.
 ## Phase result
 
 `PHASE-02 — Multi-Tenancy & Organization` — **GATE PASSED** (02-A…02-D complete; cross-tenant read/write/export denial proven). Next: PHASE-03 Fleet Foundation.
+
+## Checkpoint: 03-A — Vehicle Categories
+
+- Task: `PHASE-03 / 03-A / 03-A01…A08`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `vehicle_categories` + `category_features` migrations (unique code per tenant, features JSONB list); CategoriesService/Repository with tenant scoping via tenantScopedClient; lifecycle (active toggle, no hard delete of referenced categories); CATEGORY_CODE_TAKEN/VEHICLE_VALIDATION_FAILED error codes; GET/POST/PATCH categories + active toggle endpoints behind AgencyScopeGuard + staff.manage.
+- Verification: unit (category rules) + integration over real PostgreSQL (CRUD, uniqueness per tenant, cross-tenant denial, authorization matrix).
+- Commit: included in the consolidated fleet-foundation commit (see 03-D10; per-checkpoint SHAs of the original branch were not present in this working checkout — see the note under 03-D10).
+
+## Checkpoint: 03-B — Vehicles
+
+- Task: `PHASE-03 / 03-B / 03-B01…B10`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: `vehicles` + `odometer_readings` migrations (unique plate per tenant, category FK, status enum, odometer immutable ascending); VehiclesService/Repository; status transition rules (ARCHIVED terminal; availability-modifying transitions guarded until PHASE-04); odometer POST/GET; list with status/category/branch/search filters; VEHICLE_PLATE_TAKEN/INVALID_VEHICLE_STATUS_TRANSITION codes.
+- Verification: unit (plate/status/odometer rules) + integration (CRUD, transitions, odometer monotonicity, cross-tenant isolation, authorization matrix).
+
+## Checkpoint: 03-C — Vehicle Media/Documents
+
+- Task: `PHASE-03 / 03-C / 03-C01…C09`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: media module with R2ObjectStorage behind the media boundary + LocalTempObjectStorage fallback (env-selected, private policy preserved); vehicle_images (ordering, single primary) + vehicle_documents (type/expiry, expired flag); upload validation (mime/size per media type); signed URL access (private-object policy; no public bucket reads); image ordering/primary/document expiry endpoints.
+- Verification: unit + integration (upload/download round-trip, ordering, primary uniqueness, expired computation, authorization + cross-tenant denial, invalid upload rejection).
+
+## Checkpoint: 03-D — Fleet UI (03-D01…D09) + Phase 03 gate (03-D10)
+
+- Task: `PHASE-03 / 03-D / 03-D01…03-D10`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: Agency Owner/Admin Web app (`apps/agency-web`, Vite + React 19 + react-router 7) with i18n (ar/fr/en, Arabic RTL first-class via `applyDocumentDirection`), AuthContext (memory-only token; dev token sign-in behind VITE_DEV_ALLOW_TOKEN_LOGIN), AgencyContext (GET /me/memberships → first ACTIVE membership), typed `@kavriqo/api-client` REST client (ESM), `@kavriqo/ui` design-system package (KAVRIQO tokens.css + primitives), fleet pages: list (search/status filter/status pills), create/edit form (validated), detail (gallery + documents + expiry), status controls, gallery management.
+- 03-D08 (ar/fr/en validation): Vitest component tests — `FleetListPage.test.tsx` (rows + translated badges, empty state, controls), `i18n.test.tsx` (en/fr LTR, ar RTL flip), `packages/ui/primitives.test.tsx` (button/badge/field/alert contract); all translations verified for the tested keys in en/fr/ar.
+- 03-D09 (responsive/RTL visual QA): live preview verified end-to-end — vite dev server (allowedHosts for the preview domain, `/api` dev proxy to the local API), local JWKS dev server (mirrors the e2e helper) + minted token auto-provisioning a user via the real identity-resolution path; sign-in, language switcher and RTL direction flip exercised in-browser; `npm run build` (vite) and jsdom tests cover the DOM level.
+- Files changed: `apps/agency-web/**` (app, i18n, auth, agency, fleet pages, tests, vite config), `packages/api-client/**`, `packages/ui/**` (primitives, tokens.css, tests), `packages/config/**` (env schema defaults), root `eslint.config.mjs` (flat-config fix), `scripts/local-pg.cjs` + `scripts/dev-jwks.cjs`, `.gitignore`, root `package.json` (embedded-postgres devDeps), `TESTING.md`.
+- Gate evidence (03-D10), executed in this session:
+  - `npm ci`-equivalent fresh install (patch-package applied) → `npm run db:generate` → `prisma migrate deploy` on a fresh database (6/6 migrations) →
+  - `npm run lint` 0 across all 5 workspaces — after fixing the flat-config bug where `!packages/ui/**` inside `files` matched every file outside packages/ui and clobbered `parserOptions.project` (moved to `ignores`); Prisma Client generation is required before linting apps/api.
+  - `npm run typecheck` 0; `npm run build` 0 (nest build + vite builds for agency-web).
+  - Unit: api 162/162 (17 suites), config 13/13, api-client 5/5, agency-web 6/6 (2 files), ui 4/4 — 190 total.
+  - e2e: 13 suites, 106/106 against real PostgreSQL 17 (embedded-postgres, UTF-8) — tenants, memberships, branches, fleet, media, isolation, security, auth.
+  - Runtime: API boots on 0.0.0.0:4000 with local JWKS config; /api/v1/health/live 200; minted RS256 token → GET /api/v1/me auto-provisioned a user (200).
+- Security/tenant checks: UI never supplies tenant scope (agency from server-resolved memberships); token in memory only; every fleet/media endpoint guarded by AgencyScopeGuard + permissions (e2e matrix); media stays private via signed URLs.
+- Commit: consolidated commit `ARENA-03-fleet-ui` (see repo log; the historical per-workstream SHAs referenced by earlier checkpoints belong to the original pushed branch and were reconstructed in this checkout as a single consolidated commit containing the complete working tree).
+- Remaining risks: gallery/document UX verified via API + unit/DOM tests and live preview; full interactive multi-tenant UI flows land with the Customer Marketplace + Operations apps; payment/pricing not in this phase.
+
+## Phase result
+
+`PHASE-03 — Fleet Foundation` — **GATE PASSED** (03-A categories, 03-B vehicles, 03-C media/documents, 03-D fleet UI complete; lint/type/build/unit/e2e all green from a fresh install). Next: PHASE-04 Availability Engine.

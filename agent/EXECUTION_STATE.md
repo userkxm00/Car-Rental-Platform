@@ -5,16 +5,16 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-03`
-- Current workstream: `03-A Vehicle Categories`
-- Current task: `03-A01` (first eligible Fleet Foundation task — see WBS)
-- Last completed task: `02-D09 Run Phase 02 gate` (PHASE-02 COMPLETE — gate passed)
-- Last completed phase: `PHASE-02 Multi-Tenancy & Organization`
+- Current phase: `PHASE-04`
+- Current workstream: `04-A Interval Model`
+- Current task: `04-A01` (define reservation interval semantics — first eligible Availability Engine task; see WBS)
+- Last completed task: `03-D10 Run Phase 03 gate` (PHASE-03 COMPLETE — gate passed)
+- Last completed phase: `PHASE-03 Fleet Foundation`
 - Current attempt: `1`
-- Last validation: PHASE-02 gate from fresh clone (npm ci → generate → 4 migrations on a fresh DB → typecheck/build/lint/format 0 → unit 156/156 → e2e 85/85) — 2026-08-30
-- Last known good commit: `4e3fc44`
+- Last validation: PHASE-03 gate in this session — fresh install (patch-package applied) → prisma generate → `migrate deploy` on a fresh database (6/6) → lint 0 (5 workspaces) → typecheck 0 → build 0 → unit 190/190 (api 162, config 13, api-client 5, agency-web 6, ui 4) → e2e 13 suites 106/106 → live boot + minted-token /me 200 — 2026-08-30
+- Last known good commit: consolidated fleet-foundation commit on `arena/01a05097-car-rental-platform` (see git log; push retried at each gate)
 - Blocker: none
-- Next action: execute PHASE-03 Fleet Foundation per the WBS (categories → vehicles → inventory availability → pricing baseline → search/listing baseline), then the 03 gate
+- Next action: execute PHASE-04 Availability Engine per the WBS (04-A01 reservation interval semantics → block intervals → conflict protection → availability queries → scheduler), then the 04 gate
 - Last updated: 2026-08-30
 
 ## Canonical execution model
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-01 / 01-A / 01-A01`
+`PHASE-04 / 04-A / 04-A01`
 
 ## Phase 00
 

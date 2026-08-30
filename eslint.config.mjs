@@ -57,11 +57,40 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/agency-web/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        project: './apps/agency-web/tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: ['packages/ui/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser },
+      parserOptions: {
+        project: './packages/ui/tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['packages/**/*.ts'],
+    // `ignores` (not a `!` entry inside `files`) is the flat-config
+    // exclusion mechanism: `!packages/ui/**` inside `files` acts as a
+    // negated glob matching everything EXCEPT packages/ui/**, which made
+    // this block match (and clobber parserOptions.project for) unrelated
+    // files such as apps/agency-web sources.
+    ignores: ['packages/ui/**'],
     languageOptions: {
       globals: { ...globals.node, ...globals.jest },
       parserOptions: {
-        project: './packages/config/tsconfig.eslint.json',
+        project: [
+          './packages/config/tsconfig.eslint.json',
+          './packages/api-client/tsconfig.eslint.json',
+        ],
         tsconfigRootDir: import.meta.dirname,
       },
     },
