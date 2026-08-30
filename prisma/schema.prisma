@@ -46,6 +46,7 @@ model User {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   identities      UserIdentity[]
+  memberships     Membership[]
 
   @@map("users")
 }
@@ -94,6 +95,49 @@ model Tenant {
   verificationStatus TenantVerificationStatus @default(UNVERIFIED)
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
+  memberships       Membership[]
 
   @@map("tenants")
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DECLINED
+  REMOVED
+}
+
+/// Relation between a user and an agency (architecture/database-schema-v1.md
+/// §2 memberships). One user may belong to multiple agencies; within one
+/// agency the pair is unique.
+model Membership {
+  id        String           @id @default(uuid()) @db.Uuid
+  tenantId  String           @db.Uuid
+  userId    String           @db.Uuid
+  status    MembershipStatus @default(INVITED)
+  invitedAt DateTime         @default(now())
+  joinedAt  DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles     MembershipRole[]
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+/// Assigns one or more roles to a membership (architecture/
+/// database-schema-v1.md §2 membership_roles). Role keys are the versioned
+/// catalog in apps/api/src/authorization/roles.ts (validated server-side).
+model MembershipRole {
+  id           String     @id @default(uuid()) @db.Uuid
+  membershipId String     @db.Uuid
+  role         String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, role])
+  @@map("membership_roles")
 }

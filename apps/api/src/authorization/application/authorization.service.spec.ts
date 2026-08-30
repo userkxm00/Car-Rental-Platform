@@ -57,7 +57,7 @@ class MemoryPlatformAdminStore extends PlatformAdminStore {
 const OWNER_MEMBERSHIP: MembershipRecord = {
   userId: 'u-1',
   agencyId: 'agency-1',
-  role: Role.AGENCY_OWNER_ADMIN,
+  roles: [Role.AGENCY_OWNER_ADMIN],
   status: 'ACTIVE',
 };
 

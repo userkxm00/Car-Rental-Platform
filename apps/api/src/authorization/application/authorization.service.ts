@@ -75,10 +75,14 @@ export class AuthorizationService {
         this.audit(userId, permission, scope, false, 'no-membership');
         return { allowed: false, reason: 'no-membership' };
       }
-      const granted = permissionsForRole(membership.role).includes(permission);
+      // Any assigned role whose bundle contains the permission grants it
+      // (02-B04: memberships carry one or more roles).
+      const granted = membership.roles.some((role) =>
+        permissionsForRole(role).includes(permission),
+      );
       this.audit(userId, permission, scope, granted, granted ? 'membership' : 'no-permission');
       return granted
-        ? { allowed: true, via: 'membership', roles: [membership.role] }
+        ? { allowed: true, via: 'membership', roles: membership.roles }
         : { allowed: false, reason: 'no-permission' };
     }
 

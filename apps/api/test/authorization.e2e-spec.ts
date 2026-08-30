@@ -203,7 +203,7 @@ describe('Authorization (integration)', () => {
   it('denies agency capabilities without a verified agency scope', async () => {
     const userId = await resolveAppUserId('authz-user-2');
     memberships.set(userId, [
-      { userId, agencyId: AGENCY_ID, role: Role.AGENCY_OWNER_ADMIN, status: 'ACTIVE' },
+      { userId, agencyId: AGENCY_ID, roles: [Role.AGENCY_OWNER_ADMIN], status: 'ACTIVE' },
     ]);
     // Membership exists, but no server-attached scope → the scoped
     // permission cannot be granted from a bare request (01-D06).
@@ -216,7 +216,7 @@ describe('Authorization (integration)', () => {
   it('grants agency-scoped capability through an active membership + scope guard', async () => {
     const userId = await resolveAppUserId('authz-user-2');
     memberships.set(userId, [
-      { userId, agencyId: AGENCY_ID, role: Role.AGENCY_OWNER_ADMIN, status: 'ACTIVE' },
+      { userId, agencyId: AGENCY_ID, roles: [Role.AGENCY_OWNER_ADMIN], status: 'ACTIVE' },
     ]);
     const ok = await api(app)
       .get(`/api/v1/authz-demo/agencies/${AGENCY_ID}/manage`)
@@ -232,7 +232,7 @@ describe('Authorization (integration)', () => {
       {
         userId: memberId,
         agencyId: '22222222-2222-4222-8222-222222222222',
-        role: Role.AGENCY_OWNER_ADMIN,
+        roles: [Role.AGENCY_OWNER_ADMIN],
         status: 'ACTIVE',
       },
     ]);
@@ -251,7 +251,7 @@ describe('Authorization (integration)', () => {
   it('grants agency-scope routes for the right member regardless of spoofed tenant headers', async () => {
     const userId = await resolveAppUserId('authz-user-2');
     memberships.set(userId, [
-      { userId, agencyId: AGENCY_ID, role: Role.AGENCY_OWNER_ADMIN, status: 'ACTIVE' },
+      { userId, agencyId: AGENCY_ID, roles: [Role.AGENCY_OWNER_ADMIN], status: 'ACTIVE' },
     ]);
     const res = await api(app)
       .get(`/api/v1/authz-demo/agencies/${AGENCY_ID}/data`)
