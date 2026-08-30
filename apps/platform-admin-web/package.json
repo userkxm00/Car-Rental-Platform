@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/platform-admin-web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "KAVRIQO Platform — private platform owner control center (Release 1)",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

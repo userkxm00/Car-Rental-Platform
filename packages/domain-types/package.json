@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/domain-types",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Non-secret shared domain enums/types",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

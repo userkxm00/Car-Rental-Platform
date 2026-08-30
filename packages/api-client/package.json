@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Generated/typed API client shared by web and mobile clients",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

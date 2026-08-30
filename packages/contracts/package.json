@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Shared DTO/API contracts and schemas safe for clients",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

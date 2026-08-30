@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/agency-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "KAVRIQO Agency App — agency operations mobile app (React Native + Expo, Release 1)",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

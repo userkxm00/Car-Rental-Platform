@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/customer-web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "KAVRIQO Customer Marketplace — public multilingual booking web app (Release 1)",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/ui",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Shared design-system primitives",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

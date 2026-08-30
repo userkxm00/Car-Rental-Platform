@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/validation",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Shared validation primitives safe for clients",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

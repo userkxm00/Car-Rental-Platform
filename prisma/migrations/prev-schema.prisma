@@ -1,0 +1,66 @@
+// KAVRIQO database schema — Phase 01 baseline.
+//
+// Authority: architecture/database-schema-v1.md (logical model),
+// architecture/database-architecture.md (Prisma + PostGIS boundary),
+// docs/35-database-and-backend-foundations.md.
+//
+// Conventions:
+// - Prisma is the primary data-access layer; PostGIS-specific fields and
+//   queries use the documented narrow SQL adapter boundary (not yet needed
+//   in Phase 01 — no geographic types in the users baseline).
+// - No secrets (passwords/tokens) are ever stored: identity is external
+//   (Supabase Auth) and only provider subjects are linked.
+
+generator client {
+  provider = "prisma-client-js"
+  // Driver-adapter (pg) engine mode: no native engine download is needed,
+  // which also keeps generation fully offline-capable.
+  engineType = "client"
+  // Generated client must sit inside apps/api/node_modules so
+  // @prisma/client's `require('.prisma/client')` resolves it.
+  output = "../apps/api/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+/// Global identity record (architecture/database-schema-v1.md §2).
+/// At least one supported login identifier is required (email or phone —
+/// enforced by a CHECK constraint added in the migration SQL).
+model User {
+  id              String           @id @default(uuid()) @db.Uuid
+  email           String?          @unique
+  phone           String?          @unique
+  displayName     String
+  preferredLocale String           @default("en")
+  timezone        String?
+  status          UserStatus       @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  identities      UserIdentity[]
+
+  @@map("users")
+}
+
+/// Provider subject → application user link. Provider identifiers stay in
+/// this table and never leak into domain entities.
+model UserIdentity {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  provider        String
+  providerSubject String
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+  @@map("user_identities")
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Translation keys and locale utilities (ar/fr/en + RTL)",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

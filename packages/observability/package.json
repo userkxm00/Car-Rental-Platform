@@ -1,0 +1,10 @@
+{
+  "name": "@kavriqo/observability",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Logging/tracing primitives",
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
