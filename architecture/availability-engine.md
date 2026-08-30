@@ -53,6 +53,33 @@ Two incompatible commitments for the same vehicle cannot overlap.
 
 The implementation must treat interval boundaries consistently. Exact inclusivity/exclusivity is defined once and used everywhere.
 
+## Interval semantics (normative — 04-A01)
+
+The single authoritative interval contract for every time-bounded commitment
+(reservations, active rentals, vehicle blocks, holds, transfers):
+
+- Intervals are **half-open**: `[start, end)`. `start` is the inclusive
+  instant the vehicle becomes unavailable; `end` is the exclusive instant
+  availability resumes. Consequence: a rental returning at 10:00 and the
+  next pickup at 10:00 are back-to-back and **not** conflicting.
+- Overlap ⇔ `a.start < b.end && b.start < a.end`. Touching boundaries never
+  conflict.
+- `start`/`end` are **UTC instants**. All conflict and availability math is
+  instant-based; converting to tenant/user wall-clock zones is a
+  presentation boundary (timezone conversion boundary — 04-A05). No
+  availability decision may depend on a wall-clock representation.
+- A valid interval has a strictly positive duration (`end > start`); empty
+  and inverted intervals are invalid.
+- Buffers (cleaning, inspection, transfer, preparation) belong to the
+  operational availability calculation — they are never silently added
+  only in the UI. Their representation is defined with the operational
+  block model (04-A02/A03) on top of this interval contract.
+
+The executable contract lives in
+`apps/api/src/availability/domain/interval.ts` (+ unit tests); the exclusion
+strategy (04-B) and availability queries (04-C) must implement exactly this
+contract.
+
 ## Buffer time
 
 The engine must be able to support configurable operational buffers between rentals, such as:

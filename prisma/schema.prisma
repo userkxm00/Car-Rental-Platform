@@ -101,6 +101,8 @@ model Tenant {
   deliveryZones     DeliveryZone[]
   vehicleCategories VehicleCategory[]
   vehicles          Vehicle[]
+  vehicleBlocks     VehicleBlock[]
+  bookingHolds      BookingHold[]
 
   @@map("tenants")
 }
@@ -287,6 +289,7 @@ model VehicleCategory {
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicles         Vehicle[]
   features         CategoryFeature[]
+  bookingHolds     BookingHold[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -327,12 +330,88 @@ model Vehicle {
   odometer        OdometerReading[]
   images          VehicleImage[]
   documents       VehicleDocument[]
+  blocks          VehicleBlock[]
+  holds           BookingHold[]
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
   @@index([categoryId])
   @@index([currentBranchId])
   @@map("vehicles")
+}
+
+enum VehicleBlockType {
+  MAINTENANCE
+  INSPECTION
+  DAMAGE
+  TRANSFER
+  MANUAL
+  CLEANING
+  OTHER
+}
+
+enum VehicleBlockStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingChannel {
+  MARKETPLACE
+  AGENCY_WEB
+  STAFF
+  PHONE
+  WALK_IN
+  IMPORT
+}
+
+enum BookingHoldStatus {
+  ACTIVE
+  EXPIRED
+  RELEASED
+  CONSUMED
+}
+
+model VehicleBlock {
+  id        String             @id @default(uuid()) @db.Uuid
+  tenantId  String             @db.Uuid
+  vehicleId String             @db.Uuid
+  blockType VehicleBlockType
+  startsAt  DateTime
+  endsAt    DateTime
+  status    VehicleBlockStatus @default(SCHEDULED)
+  reason    String?
+  createdBy String?            @db.Uuid
+  createdAt DateTime           @default(now())
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId, startsAt, endsAt])
+  @@map("vehicle_blocks")
+}
+
+model BookingHold {
+  id         String            @id @default(uuid()) @db.Uuid
+  tenantId   String            @db.Uuid
+  vehicleId  String?           @db.Uuid
+  categoryId String?           @db.Uuid
+  startsAt   DateTime
+  endsAt     DateTime
+  expiresAt  DateTime
+  status     BookingHoldStatus @default(ACTIVE)
+  channel    BookingChannel
+  createdBy  String?           @db.Uuid
+  createdAt  DateTime          @default(now())
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category   VehicleCategory?  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([vehicleId, startsAt, endsAt])
+  @@index([expiresAt])
+  @@map("booking_holds")
 }
 
 enum VehicleStatus {
