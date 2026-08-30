@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+postgres-data/
+package-lock.json
+*.md
+.replit

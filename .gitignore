@@ -36,6 +36,7 @@ Thumbs.db
 # Test artifacts
 test-results/
 playwright-report/
+*.tsbuildinfo
 
 # Local tooling
 replit.nix.local

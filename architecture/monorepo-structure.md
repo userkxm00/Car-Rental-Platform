@@ -4,6 +4,18 @@
 
 Keep customer web, agency operations mobile, owner/admin web, shared contracts, and backend domain logic in one repository while preserving strict boundaries.
 
+## Package manager & workspace conventions
+
+- **npm workspaces** is the canonical package manager (`npm >= 10`, Node `>= 20.19`, Node 22 LTS recommended). It was selected because it ships with every supported Node runtime and needs no extra tooling; no agent, IDE, or hosting environment is required to install a special package manager.
+- Workspace globs: `apps/*` and `packages/*` (see root `package.json`).
+- Package naming: scoped `@kavriqo/<name>`; all packages are `private: true` and versioned together (`0.1.0`).
+- `package-lock.json` is committed. Install with `npm install` at the repository root; `npm ci` is preferred in CI for reproducible installs.
+- `engine-strict=true` in `.npmrc` makes unsupported runtimes fail loudly instead of producing subtle breakage.
+- Root scripts (`dev`, `build`, `typecheck`, `lint`, `test`, `format`) delegate to workspaces with `--if-present`; a workspace that has not yet adopted a script is skipped, never broken.
+- Shared TypeScript strictness lives in `tsconfig.base.json`; every package extends it and sets its own `module`/`moduleResolution`/`jsx`/`types` settings (API: `commonjs`; browser/bundler apps: bundler-style resolution).
+- Release boundary: workspace directories exist only for Release 1 surfaces (`api`, `customer-web`, `agency-web`, `agency-mobile`, `platform-admin-web`) plus shared packages. `apps/customer-mobile` is created when Release 2 starts.
+- Formatting conventions (`.editorconfig`, Prettier, ESLint) are owned by the 01-A08 tooling task.
+
 ## Proposed structure
 
 ```text

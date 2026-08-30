@@ -51,6 +51,23 @@ The K symbol/wordmark should be implemented consistently across the web, favicon
 
 Plan first, implement in verified phases, preserve documented business rules, test critical workflows, record executable evidence, and keep the repository documentation synchronized with the implementation.
 
+## Development
+
+Prerequisites: Node `>= 20.19` (22 LTS recommended) with npm `>= 10`.
+
+```bash
+npm install          # installs all workspaces from the root
+npm run dev          # starts dev processes for workspaces that define one (currently apps/api)
+npm run build        # production builds
+npm run typecheck    # strict TypeScript across workspaces
+npm run lint         # ESLint across workspaces
+npm run test         # unit + e2e test suites
+```
+
+Repository layout and package-manager conventions are documented in
+`architecture/monorepo-structure.md`. Local infrastructure (PostgreSQL + PostGIS,
+Redis) follows `docs/provider-and-environment-contract.md`.
+
 ## Reference projects
 
 The repository contains audited rental, fleet-management, business-application, design, testing and agent-skill references. They are used for patterns and ideas, not for blind code or branding reuse.

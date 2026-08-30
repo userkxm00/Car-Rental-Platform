@@ -1,0 +1,45 @@
+{
+  "name": "kavriqo",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "KAVRIQO — Car Rental & Mobility Platform. Multi-tenant SaaS + marketplace monorepo (Release 1).",
+  "packageManager": "npm@10.9.8",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspaces --if-present",
+    "test:cov": "npm run test:cov --workspaces --if-present",
+    "postinstall": "patch-package",
+    "db:generate": "node apps/api/scripts/prisma-generate.cjs",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:create": "node scripts/db-migrate-create.cjs",
+    "db:diff": "prisma migrate diff --from-schema-datamodel prisma/migrations/prev-schema.prisma --to-schema-datamodel prisma/schema.prisma --script",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,cjs,json,yml,yaml}\" \"!**/package-lock.json\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,cjs,json,yml,yaml}\" \"!**/package-lock.json\"",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@prisma/schema-engine-wasm": "^7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^16.5.0",
+    "patch-package": "^8.0.1",
+    "prettier": "^3.9.6",
+    "prisma": "^6.19.3",
+    "typescript-eslint": "^8.68.0"
+  }
+}
