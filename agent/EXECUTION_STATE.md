@@ -5,16 +5,16 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-01`
-- Current workstream: `01-B Supabase Identity Boundary`
-- Current task: `01-B01 Define Auth provider adapter interface`
-- Last completed task: `01-A10 Verify clean development boot and document evidence` (workstream `01-A Runtime Foundation` COMPLETE)
-- Last completed phase: `PHASE-00`
+- Current phase: `PHASE-02`
+- Current workstream: `02-A Agency/Tenant`
+- Current task: `02-A01 Create tenant migration`
+- Last completed task: `01-E05 Run Phase 01 gate` (PHASE-01 COMPLETE — gate passed)
+- Last completed phase: `PHASE-01 Foundation & Identity`
 - Current attempt: `1`
-- Last validation: clean-clone full pipeline (npm ci, typecheck, build, lint, unit 35/35, e2e 13/13, boot, ready=200) — 2026-08-30
-- Last known good commit: `4ecc3b8`
+- Last validation: PHASE-01 gate from fresh clone (typecheck/build/lint/format 0; unit 92/92; e2e 46/46; boot+health+envelope+JSON logs verified) — 2026-08-30
+- Last known good commit: `fe36e46`
 - Blocker: none
-- Next action: execute `01-B01` then continue the 01-B workstream (adapter interface → Supabase token verification boundary → identity mapping/provisioning → disabled identity handling → flow boundaries → integration tests)
+- Next action: execute `02-A01` (tenants migration) then continue the 02-A workstream (repository → lifecycle → slug → settings → marketplace flag → verification state → tests)
 - Last updated: 2026-08-30
 
 ## Canonical execution model

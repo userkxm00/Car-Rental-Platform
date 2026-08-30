@@ -266,3 +266,45 @@ Append one checkpoint per completed task or phase gate.
 ## Workstream result
 
 `PHASE-01 / 01-C User Identity` — **COMPLETE** (01-C01…01-C08). Users migrate through the standard Prisma flow; identity is database-backed behind the provider-neutral boundary; lifecycle and preferences are enforced server-side; uniqueness and provider-link consistency are verified against a real database.
+
+## Checkpoint: 01-D — Authorization (permissions, roles, guards, scope, audit)
+
+- Task: `PHASE-01 / 01-D / 01-D01…01-D10`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: versioned permission catalog (docs/36 examples + profile.manage + audited platform.admin); role bundles incl. MEMBERSHIP_ROLES (platform admin excluded from memberships); AuthorizationService evaluation chain (active user → platform grant → membership role → bundle) with audit events for platform.* and denials; PermissionGuard + @RequirePermission/@PlatformScope/@AuthUserId; AgencyScope/BranchScope guards attach server-verified scope only — no client-supplied role/tenant input exists (01-D08); truthful static stores until 02-A/02-B/02-C.
+- Verification: unit 92/92 (catalog 7, evaluation 10); e2e 40/40 incl. authorization matrix (401s, customer grant/deny, spoofed headers/query ignored, server-granted platform admin, scoped membership grant/deny incl. cross-agency, malformed IDs 400).
+- Security checks: platform admin never via membership; denied/platform decisions audited; scope derives from route params + server membership only.
+- Commit: `5d0c77d`
+
+## Checkpoint: 01-E01…E04 — Session/Security boundaries
+
+- Task: `PHASE-01 / 01-E / 01-E01…01-E04`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: SessionRevocationBoundary + bounded in-memory registry (session-id + subject matching; TOKEN_REVOKED added to the taxonomy; checked in AuthGuard after verification); RateLimitGuard + fixed-window store (keys by server-resolved identity, never client inputs; 429 RATE_LIMITED envelope with retryAfterSeconds) applied to PATCH /me; secure error envelopes verified leak-free.
+- Verification: unit 92/92; e2e 46/46 — security regression suite: accept→revoke→401 TOKEN_REVOKED, subject-wide revocation, within-window pass + overflow 429, no-internal-leak assertions.
+- Commit: `fe36e46`
+
+## Checkpoint: 01-E05 — Phase 01 gate
+
+- Task: `PHASE-01 / 01-E / 01-E05` (closes PHASE-01)
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: full gate executed from a fresh `git clone` of the pushed branch: `npm ci` (patch-package applied) → prisma generate → migrate deploy (idempotent, no pending) → typecheck 0 → build 0 → lint 0 → format 0 → unit 92/92 → e2e 46/46 → runtime boot (staging, JSON logs 18/18 parseable) → live 200 / ready 200 (real PostgreSQL 17.10) / me 401 UNAUTHORIZED / unknown route 404 with requestId echo.
+- Gate checklist (TASK_EXECUTION_STANDARD):
+  - implementation scope: PHASE-01 workstreams 01-A…01-E all DONE with per-unit evidence;
+  - business rules: server-authoritative identity/authz; no client role/tenant inputs anywhere;
+  - database/migrations: users/user_identities migrated via standard Prisma flow, CHECK-free corrected invariant (identity link is the login identifier), status clean;
+  - authorization/tenant isolation: platform boundary separated from memberships; scope guards deny cross-agency access (tested);
+  - domain invariants: unique provider-subject, unique email, cascade delete, idempotent provisioning (all tested against real DB);
+  - tests: 92 unit + 46 e2e, all green;
+  - type/lint/build/format: all clean;
+  - critical runtime behavior: boot, health, error envelope, correlation logs verified live;
+  - documentation: TESTING.md, auth-flow-contracts.md, evidence log, execution state;
+  - security: revocation, rate limits, 5xx masking, secret redaction, log-injection-safe request IDs (all tested).
+- Notes: local PostgreSQL is embedded-postgres (npm-bundled PG 17 binaries, UTF-8) because the sandbox blocks Docker/apt; Prisma runs on the JS schema engine + adapter-pg with a documented upstream patch. Both are environment accommodations recorded in TESTING.md — the frozen stack (PostgreSQL + Prisma) is unchanged.
+
+## Phase result
+
+`PHASE-01 — Foundation & Identity` — **GATE PASSED**. Workstreams 01-A (runtime foundation), 01-B (Supabase identity boundary), 01-C (user identity), 01-D (authorization), 01-E (session/security gate) complete. Next: PHASE-02 Multi-Tenancy & Organization.
