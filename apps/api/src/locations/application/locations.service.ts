@@ -1,5 +1,11 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Location, LocationHourException, LocationHours, LocationType, Prisma } from '@prisma/client';
+import {
+  Location,
+  LocationHourException,
+  LocationHours,
+  LocationType,
+  Prisma,
+} from '@prisma/client';
 import {
   BranchErrorCode,
   isValidDayOfWeek,
