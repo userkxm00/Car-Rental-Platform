@@ -392,7 +392,7 @@ Append one checkpoint per completed task or phase gate.
   - e2e: 13 suites, 106/106 against real PostgreSQL 17 (embedded-postgres, UTF-8) — tenants, memberships, branches, fleet, media, isolation, security, auth.
   - Runtime: API boots on 0.0.0.0:4000 with local JWKS config; /api/v1/health/live 200; minted RS256 token → GET /api/v1/me auto-provisioned a user (200).
 - Security/tenant checks: UI never supplies tenant scope (agency from server-resolved memberships); token in memory only; every fleet/media endpoint guarded by AgencyScopeGuard + permissions (e2e matrix); media stays private via signed URLs.
-- Commit: consolidated commit `ARENA-03-fleet-ui` (see repo log; the historical per-workstream SHAs referenced by earlier checkpoints belong to the original pushed branch and were reconstructed in this checkout as a single consolidated commit containing the complete working tree).
+- Commit: `ff47275` (rebased onto the original branch history `be65feb`; pushed to origin). The consolidated commit captures the delta of this session — 03-C media, 03-D fleet UI, eslint flat-config fix, dev tooling scripts and Vitest UI tests — on top of the previously pushed per-workstream history.
 - Remaining risks: gallery/document UX verified via API + unit/DOM tests and live preview; full interactive multi-tenant UI flows land with the Customer Marketplace + Operations apps; payment/pricing not in this phase.
 
 ## Phase result
