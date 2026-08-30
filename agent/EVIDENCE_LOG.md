@@ -308,3 +308,44 @@ Append one checkpoint per completed task or phase gate.
 ## Phase result
 
 `PHASE-01 — Foundation & Identity` — **GATE PASSED**. Workstreams 01-A (runtime foundation), 01-B (Supabase identity boundary), 01-C (user identity), 01-D (authorization), 01-E (session/security gate) complete. Next: PHASE-02 Multi-Tenancy & Organization.
+
+## Checkpoint: 02-A — Agency/Tenant
+
+- Task: `PHASE-02 / 02-A / 02-A01…A08`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: tenants migration (lifecycle + verification enums, unique slug); TenantRepository/Service (create, slug public identity with strict URL-safe shape, settings, marketplace flag, verification flow, lifecycle transitions with terminal ARCHIVED); shared PrismaModule moved to src/prisma.
+- Verification: unit (slug/lifecycle rules) + integration over real PostgreSQL (duplicate slug SLUG_TAKEN, invalid inputs, terminal states, verification flow).
+- Commit: `b33a89a`
+
+## Checkpoint: 02-B — Membership
+
+- Task: `PHASE-02 / 02-B / 02-B01…B06`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: memberships + membership_roles migrations; invite → accept/decline (own-invitation only), re-invite declined; status transitions (REMOVED terminal); role assignment restricted to MEMBERSHIP_ROLES; multi-agency membership; MembershipStore port upgraded to multi-role; AuthorizationService grants on any assigned role; DbMembershipStore (global) replaces the static store; guarded endpoints (AgencyScopeGuard + staff.manage).
+- Verification: unit (transition rules) + integration suite (12) incl. cross-agency denial, permission enforcement, suspended-agency block.
+- Security: no client-supplied role/tenant inputs; ownership from server-resolved identity.
+- Commit: `05fafcd`
+
+## Checkpoint: 02-C — Branches & Locations
+
+- Task: `PHASE-02 / 02-C / 02-C01…C08`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: locations (global + tenant-owned, six types), branches (unique code per tenant; same-tenant-or-global location constraint), recurring + exception operating hours (validated HH:MM, closed-all-day), branch contacts JSONB, delivery-zone baseline; PostGIS geometry columns deferred to the spatial phase (documented in the migration notes).
+- Verification: unit (rules) + integration suite (13) incl. cross-tenant location denial, code uniqueness across tenants, hour validation, exception replacement, tenant-scoped reads.
+- Commit: `3844d6d`
+
+## Checkpoint: 02-D — Tenant Isolation (+ Phase 02 gate)
+
+- Task: `PHASE-02 / 02-D / 02-D01…D09`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: tenantScopedClient Prisma extension forcing tenantId on every tenant-owned operation (creates injected, reads/writes filtered, cross-scope values throw); assertSameTenant/assertTenantScope for entity and job/export payload checks; cross-tenant read/write/export denial proven over real PostgreSQL.
+- Gate evidence (02-D09): fresh clone of the pushed branch — npm ci (patch-package applied) → prisma generate → `migrate deploy` on a brand-new database (4/4 migrations, 11 tables) → typecheck/build/lint/format 0 → unit 156/156 → e2e 85/85.
+- Commit: `4e3fc44`
+
+## Phase result
+
+`PHASE-02 — Multi-Tenancy & Organization` — **GATE PASSED** (02-A…02-D complete; cross-tenant read/write/export denial proven). Next: PHASE-03 Fleet Foundation.
