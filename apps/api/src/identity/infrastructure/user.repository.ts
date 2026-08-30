@@ -4,7 +4,7 @@ import { Prisma, UserStatus } from '@prisma/client';
 import type { VerifiedPrincipal } from '../../auth/ports/auth-provider.port';
 import { ApplicationUserRecord } from '../../auth/ports/identity-store.port';
 import { IdentityErrorCode } from '../domain/identity-errors';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 export interface UserProfile {
   id: string;

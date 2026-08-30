@@ -2,7 +2,7 @@ import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { APP_ENV } from '../../config/app-env.token';
+import { APP_ENV } from '../config/app-env.token';
 import type { AppEnv } from '@kavriqo/config';
 
 /**

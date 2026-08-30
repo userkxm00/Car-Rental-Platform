@@ -5,7 +5,7 @@ import { SecurityModule } from '../security/security.module';
 import { UserProfileService } from './application/user-profile.service';
 import { PrismaIdentityStore } from './infrastructure/prisma-identity-store';
 import { UserRepository } from './infrastructure/user.repository';
-import { PrismaModule } from './prisma/prisma.module';
+import { PrismaModule } from '../prisma/prisma.module';
 import { ProfileController } from './presentation/profile.controller';
 
 /**

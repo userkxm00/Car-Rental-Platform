@@ -64,3 +64,36 @@ model UserIdentity {
   @@index([userId])
   @@map("user_identities")
 }
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+/// Agency/company account (architecture/database-schema-v1.md §2 tenants).
+/// Every tenant-owned table references tenantId; tenant scope is enforced by
+/// repository helpers (02-D02), never by client-supplied identifiers.
+model Tenant {
+  id                String                   @id @default(uuid()) @db.Uuid
+  name              String
+  legalName         String?
+  slug              String                   @unique
+  defaultLocale     String                   @default("en")
+  defaultTimezone   String?
+  defaultCurrency   String                   @default("DZD")
+  status            TenantStatus             @default(ACTIVE)
+  marketplaceEnabled Boolean                 @default(false)
+  verificationStatus TenantVerificationStatus @default(UNVERIFIED)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@map("tenants")
+}
