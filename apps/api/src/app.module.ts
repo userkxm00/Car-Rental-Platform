@@ -8,6 +8,7 @@ import { LocationsModule } from './locations/locations.module';
 import { FleetModule } from './fleet/fleet.module';
 import { MediaModule } from './media/media.module';
 import { MembershipsModule } from './memberships/memberships.module';
+import { AvailabilityModule } from './availability/availability.module';
 import { TenantsModule } from './tenants/tenants.module';
 
 /**
@@ -28,6 +29,7 @@ import { TenantsModule } from './tenants/tenants.module';
     LocationsModule,
     FleetModule,
     MediaModule,
+    AvailabilityModule,
     HealthModule,
   ],
 })
