@@ -446,3 +446,17 @@ Append one checkpoint per completed task or phase gate.
 ## Phase result
 
 `PHASE-04 — Availability Engine` — **GATE PASSED** (04-A interval model, 04-B conflict protection, 04-C availability queries, 04-D scheduler timeline + cache boundary complete; lint/type/build/unit/e2e all green). Next: PHASE-05 Booking Engine (05-A Quote/Request).
+
+## Checkpoint: 05-A — Quote/Request
+
+- Task: `PHASE-05 / 05-A / 05-A01…A07`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Quote module (`apps/api/src/quotes/`). Request DTOs validated at the boundary (05-A01): interval via the shared 04-A contract (409 INVALID_INTERVAL), start must be in the future (409 INTERVAL_IN_PAST), exactly one of vehicleId/categoryId (409 QUOTE_TARGET_REQUIRED / QUOTE_TARGET_EXCLUSIVE), channel whitelist (409 INVALID_CHANNEL). Eligibility (05-A02): targets and locations tenant-validated (404 VEHICLE_NOT_FOUND / CATEGORY_NOT_FOUND / CATEGORY_INACTIVE / BRANCH_NOT_FOUND / DELIVERY_ZONE_NOT_FOUND). Availability (05-A03): server-computed via the 04-C services (vehicle answer with structured reasons; category capacity answer). Pricing boundary (05-A04): `QUOTE_PRICING_PORT` + `QuotePricingPort` — the quote carries `pricing: null` until PHASE-06 registers the engine; consumers must treat unpriced quotes as not bookable, never as zero-price. Expiry (05-A05): `expiresAt = now + QUOTE_TTL_MINUTES` (config, default 30); reads carry an explicit `expired` flag — expired quotes are never silently current (docs/06). Response contract (05-A06): `{quoteId, channel, createdAt, expiresAt, expired, request, availability, pricing}`. Persistence: `quote_records` migration (immutable request context + availability/pricing slots, tenant FK cascade, nullable FKs SET NULL so audit survives entity deletion). API: `POST/GET /api/v1/agencies/:agencyId/quotes[/:quoteId]` (AgencyScopeGuard + booking.create / booking.read). Shared refactor: location-context validation extracted from the availability controller into `LocationContextService` (04-C06), exported from AvailabilityModule and reused by quotes; `AvailabilityService.findCategoryInTenant` exposed for eligibility.
+- Verification: unit `quotes.service.spec` (12: validation/eligibility/availability/pricing-port/expiry/tenant-scoped reads, over a fake repository + the REAL availability service) and e2e `quotes.e2e-spec` (8: auth/membership, vehicle quote with null pricing, blocked-vehicle reasons, category capacity, boundary error matrix, tenant validation, expiry flag, cross-tenant isolation). Full gate green: lint 0, typecheck 0, build 0, unit 250 (232 + 5 + 13), e2e 137 (17 suites).
+- Notes: Prisma requires named relations for the two Branch FKs (`QuotePickupBranch`/`QuoteReturnBranch`) and `Prisma.JsonNull` for the nullable JSON column; `npx prisma format` cannot run offline (binaries.prisma.sh) — the offline `npm run db:generate` script is canonical here.
+- Commit: `9f4221b`
+
+## Phase 05 progress
+
+05-A complete. Next: 05-B Booking Aggregate (booking schema → numbering → vehicle/category bookings → holds → price snapshot linkage → status history → aggregate tests).

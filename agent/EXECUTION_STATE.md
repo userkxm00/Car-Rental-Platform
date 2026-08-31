@@ -6,15 +6,15 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-05`
-- Current workstream: `05-A Quote/Request`
-- Current task: `05-A01` (quote request DTOs — see WBS)
-- Last completed task: `04-D08` (Phase 04 gate — Availability Engine COMPLETE)
+- Current workstream: `05-B Booking Aggregate`
+- Current task: `05-B01` (booking schema — see WBS)
+- Last completed task: `05-A07` (quote tests — 05-A Quote/Request COMPLETE)
 - Last completed phase: `PHASE-04 Availability Engine`
 - Current attempt: `1`
-- Last validation: full gate after 04-D — lint 0 → typecheck 0 → build 0 → unit 238 (api 220, config 5, api-client 5, agency-web 6, ui 4) → e2e 129 (16 suites incl. availability-schema, conflict-protection, availability) — 2026-08-31
-- Last known good commit: `f337f86` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31; 04-D commit follows)
+- Last validation: full gate after 05-A — lint 0 → typecheck 0 → build 0 → unit 250 (api 232, config 5, api-client 5, agency-web 6, ui 4) → e2e 137 (17 suites incl. quotes) — 2026-08-31
+- Last known good commit: `9f4221b` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
 - Blocker: none
-- Next action: execute PHASE-05 workstream 05-A Quote/Request (DTOs → eligibility → availability integration → pricing boundary → expiry → response contract → tests), then 05-B Booking Aggregate, 05-C State Machine, 05-D Lifecycle Operations, then the 05 gate
+- Next action: execute PHASE-05 workstream 05-B Booking Aggregate (booking schema → numbering → vehicle/category bookings → holds → price snapshot linkage → status history → aggregate tests), then 05-C State Machine, 05-D Lifecycle Operations, then the 05 gate
 - Last updated: 2026-08-31
 
 ## Canonical execution model
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-05 / 05-A / 05-A01`
+`PHASE-05 / 05-B / 05-B01`
 
 ## Phase 04 result (Availability Engine)
 
