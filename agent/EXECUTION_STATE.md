@@ -6,15 +6,15 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-05`
-- Current workstream: `05-C State Machine`
-- Current task: `05-C01` (implement DRAFT — see WBS)
-- Last completed task: `05-B08` (booking aggregate tests — 05-B Booking Aggregate COMPLETE)
+- Current workstream: `05-D Lifecycle Operations`
+- Current task: `05-D01` (customer cancellation — see WBS)
+- Last completed task: `05-C12` (authorize every transition — 05-C State Machine COMPLETE)
 - Last completed phase: `PHASE-04 Availability Engine`
 - Current attempt: `1`
-- Last validation: full gate after 05-B — lint 0 → typecheck 0 → build 0 → unit 262 (api 244, config 5, api-client 5, agency-web 6, ui 4) → e2e 145 (18 suites incl. bookings) — 2026-08-31
-- Last known good commit: `6780674` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
+- Last validation: full gate after 05-C — lint 0 → typecheck 0 → build 0 → unit 280 (api 262, config 5, api-client 5, agency-web 6, ui 4) → e2e 152 (19 suites incl. booking-state) — 2026-08-31
+- Last known good commit: `714c800` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
 - Blocker: none
-- Next action: execute PHASE-05 workstream 05-C State Machine (DRAFT→HOLD→PENDING_CONFIRMATION→CONFIRMED→READY_FOR_PICKUP→ACTIVE→RETURN_PENDING→RETURNED→SETTLEMENT_PENDING→COMPLETED + exceptional states, every transition authorized), then 05-D Lifecycle Operations, then the 05 gate
+- Next action: execute PHASE-05 workstream 05-D Lifecycle Operations (customer/agency cancellation policy, hold expiration automation, no-show workflow, extension requests + conflict handling, vehicle reassignment, walk-in/manual bookings, idempotent commands, audit events, integration tests, phase 05 gate)
 - Last updated: 2026-08-31
 
 ## Canonical execution model
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-05 / 05-C / 05-C01`
+`PHASE-05 / 05-D / 05-D01`
 
 ## Phase 04 result (Availability Engine)
 
