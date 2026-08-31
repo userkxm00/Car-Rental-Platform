@@ -1,12 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type BookingStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   assertIntervalFree,
   withVehicleCommitmentLock,
 } from '../../availability/infrastructure/commitment-guard';
 import { formatBookingNumber } from '../domain/booking-rules';
-import type { BookingStatus } from '@prisma/client';
 
 /** One append-only status history entry. */
 export interface BookingHistoryEntry {
@@ -136,6 +135,144 @@ export class BookingsRepository {
       take: 200,
     });
     return bookings.map((b) => this.toDomain(b, b.statusHistory));
+  }
+
+  /**
+   * 05-C: apply one transition atomically — the status update is guarded by
+   * the expected source status (concurrent commands cannot both win) and the
+   * append-only history entry lands in the same transaction.
+   */
+  async applyTransition(input: {
+    bookingId: string;
+    from: BookingStatus;
+    to: BookingStatus;
+    actorUserId: string | null;
+    reason: string;
+    data?: {
+      customerId?: string | null;
+      quoteId?: string | null;
+    };
+  }): Promise<BookingWithHistory> {
+    const booking = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.booking.updateMany({
+        where: { id: input.bookingId, status: input.from },
+        data: {
+          status: input.to,
+          ...(input.data?.customerId !== undefined ? { customerId: input.data.customerId } : {}),
+          ...(input.data?.quoteId !== undefined ? { quoteId: input.data.quoteId } : {}),
+        },
+      });
+      if (updated.count !== 1) {
+        throw new Error('BOOKING_INVALID_TRANSITION: concurrent transition lost');
+      }
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId: input.bookingId,
+          fromStatus: input.from,
+          toStatus: input.to,
+          actorUserId: input.actorUserId,
+          reason: input.reason,
+        },
+      });
+      return tx.booking.findUniqueOrThrow({
+        where: { id: input.bookingId },
+        include: HISTORY_INCLUDE,
+      });
+    });
+    return this.toDomain(booking, booking.statusHistory);
+  }
+
+  /** The booking's active vehicle hold (05-B05/05-C), if any. */
+  async findActiveHold(
+    bookingId: string,
+  ): Promise<{ id: string; vehicleId: string | null; expiresAt: Date; status: string } | null> {
+    return this.prisma.bookingHold.findFirst({
+      where: { bookingId, status: 'ACTIVE' },
+    });
+  }
+
+  /**
+   * 05-C: refresh the confirmed booking's hold to cover the whole rental
+   * interval (confirmation protects the inventory for the full interval),
+   * or release/consume it — always under the commitment guard.
+   */
+  async updateBookingHold(input: {
+    vehicleId: string;
+    holdId: string;
+    status: 'ACTIVE' | 'RELEASED' | 'CONSUMED' | 'EXPIRED';
+    expiresAt?: Date;
+  }): Promise<void> {
+    await withVehicleCommitmentLock(this.prisma, input.vehicleId, async (tx) => {
+      const updated = await tx.bookingHold.updateMany({
+        where: { id: input.holdId, status: 'ACTIVE' },
+        data: {
+          status: input.status,
+          ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
+        },
+      });
+      if (updated.count !== 1) {
+        throw new Error('BOOKING_HOLD_NOT_ACTIVE: hold already transitioned');
+      }
+    });
+  }
+
+  /** Tenant-scoped quote lookup for confirmation linkage (05-C01/C02). */
+  async findQuoteInTenant(
+    tenantId: string,
+    quoteId: string,
+  ): Promise<{ id: string; vehicleId: string | null; categoryId: string | null; expiresAt: Date } | null> {
+    return this.prisma.quoteRecord.findFirst({
+      where: { id: quoteId, tenantId },
+      select: { id: true, vehicleId: true, categoryId: true, expiresAt: true },
+    });
+  }
+
+  /** The quote's pricing slot for the 05-B06 snapshot (null until PHASE-06). */
+  async findQuotePricing(
+    tenantId: string,
+    quoteId: string,
+  ): Promise<unknown | null> {
+    const quote = await this.prisma.quoteRecord.findFirst({
+      where: { id: quoteId, tenantId },
+      select: { pricingJson: true },
+    });
+    return quote?.pricingJson ?? null;
+  }
+
+  /** 05-B06: capture the immutable commercial snapshot at confirmation. */
+  async capturePriceSnapshot(bookingId: string, pricingJson: unknown | null): Promise<void> {
+    await this.prisma.bookingPriceSnapshot.create({
+      data: {
+        bookingId,
+        pricingJson: pricingJson === null ? Prisma.JsonNull : (pricingJson as never),
+      },
+    });
+  }
+
+  /**
+   * 05-C03: confirmation re-check — conflicting SCHEDULED/ACTIVE blocks and
+   * conflicting ACTIVE holds EXCLUDING the booking's own hold. If anything
+   * else overlaps, the interval is no longer safe to confirm.
+   */
+  async conflictingCommitmentsExcludingHold(
+    vehicleId: string,
+    interval: { start: Date; end: Date },
+    excludeHoldId: string | null,
+  ): Promise<Array<{ id: string; kind: 'BLOCK' | 'HOLD' }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; kind: 'BLOCK' | 'HOLD' }>>`
+      SELECT b."id" AS "id", 'BLOCK' AS "kind"
+      FROM "vehicle_blocks" b
+      WHERE b."vehicleId" = ${vehicleId}::uuid
+        AND b."status" IN ('SCHEDULED', 'ACTIVE')
+        AND b."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')
+      UNION ALL
+      SELECT h."id" AS "id", 'HOLD' AS "kind"
+      FROM "booking_holds" h
+      WHERE h."vehicleId" = ${vehicleId}::uuid
+        AND h."status" = 'ACTIVE'
+        AND (${excludeHoldId}::uuid IS NULL OR h."id" <> ${excludeHoldId}::uuid)
+        AND h."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')`;
+    return rows;
   }
 
   /**

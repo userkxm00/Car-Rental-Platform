@@ -38,6 +38,18 @@ export const BookingErrorCode = {
   INTERVAL_CONFLICT: 'INTERVAL_CONFLICT',
   /** Category bookings hold capacity, not a vehicle interval. */
   BOOKING_HOLD_UNSUPPORTED: 'BOOKING_HOLD_UNSUPPORTED',
+  /** READY_FOR_PICKUP/check-out needs a physical vehicle (05-D07 assigns). */
+  BOOKING_ASSIGNMENT_REQUIRED: 'BOOKING_ASSIGNMENT_REQUIRED',
+  /** Confirmation needs the customer identity (05-C03 precondition). */
+  BOOKING_CUSTOMER_REQUIRED: 'BOOKING_CUSTOMER_REQUIRED',
+  /** The linked quote does not match the booking target. */
+  BOOKING_QUOTE_MISMATCH: 'BOOKING_QUOTE_MISMATCH',
+  /** The booking has no live hold to refresh/release. */
+  BOOKING_HOLD_NOT_ACTIVE: 'BOOKING_HOLD_NOT_ACTIVE',
+  /** Cancel/reject/no-show commands require a documented reason. */
+  BOOKING_REASON_REQUIRED: 'BOOKING_REASON_REQUIRED',
+  /** The booking's own hold has not expired yet. */
+  BOOKING_HOLD_NOT_EXPIRED: 'BOOKING_HOLD_NOT_EXPIRED',
 } as const;
 
 export type BookingErrorCodeValue = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];

@@ -48,6 +48,147 @@ export class BookingsController {
     return this.service.placeBookingHold(agencyId, userId, bookingId);
   }
 
+  /**
+   * 05-C: named state-machine commands. Each endpoint carries exactly the
+   * permission its transition requires (05-C12); the service enforces the
+   * transition table — clients can never set a status directly.
+   */
+  @Post(':bookingId/request-confirmation')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CREATE)
+  async requestConfirmation(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { customerId?: string; quoteId?: string },
+  ): Promise<BookingResponse> {
+    return this.service.requestConfirmation(agencyId, userId, bookingId, body ?? {});
+  }
+
+  @Post(':bookingId/confirm')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async confirm(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.confirmBooking(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/ready')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async markReady(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.markReady(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/check-out')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async checkOut(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.checkOut(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/request-return')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_RETURN)
+  async requestReturn(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.requestReturn(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/complete-return')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_RETURN)
+  async completeReturn(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.completeReturn(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/open-settlement')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_RETURN)
+  async openSettlement(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.openSettlement(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/complete')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_RETURN)
+  async complete(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.completeBooking(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/cancel')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CANCEL)
+  async cancel(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { reason?: string },
+  ): Promise<BookingResponse> {
+    return this.service.cancelBooking(agencyId, userId, bookingId, body?.reason ?? '');
+  }
+
+  @Post(':bookingId/reject')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async reject(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { reason?: string },
+  ): Promise<BookingResponse> {
+    return this.service.rejectBooking(agencyId, userId, bookingId, body?.reason ?? '');
+  }
+
+  @Post(':bookingId/expire')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CANCEL)
+  async expire(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.expireBooking(agencyId, userId, bookingId);
+  }
+
+  @Post(':bookingId/no-show')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async noShow(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { reason?: string },
+  ): Promise<BookingResponse> {
+    return this.service.markNoShow(agencyId, userId, bookingId, body?.reason ?? '');
+  }
+
   @Get()
   @UseGuards(AgencyScopeGuard, PermissionGuard)
   @RequirePermission(Permission.BOOKING_READ)

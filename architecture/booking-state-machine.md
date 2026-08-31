@@ -181,3 +181,51 @@ Booking engine is not complete until all transitions have:
 - transaction/concurrency behavior
 - unit/integration tests
 - E2E critical-path coverage
+
+## Implemented state machine (05-C)
+
+The operative machine (per `agent/IMPLEMENTATION-WBS-V2.md` 05-C) is enforced
+in `apps/api/src/bookings/domain/booking-transitions.ts`. Every transition is
+a named command with a fixed source set, a single target and an explicit
+permission (05-C12); the API exposes only commands — clients can never set a
+status directly, and every applied transition appends an audit row to
+`booking_status_history` in the same transaction.
+
+Mapping to the proposed states above: QUOTED = the linked quote record
+(05-A); PREPARING/CHECKED_OUT = READY_FOR_PICKUP; IN_RENTAL = ACTIVE;
+RETURNING = RETURN_PENDING; INSPECTION_PENDING = RETURNED. Extensions and
+overdue are records (05-D), never statuses.
+
+| Command | From | To | Permission |
+|---|---|---|---|
+| requestConfirmation | DRAFT, HOLD | PENDING_CONFIRMATION | booking.create |
+| confirm | PENDING_CONFIRMATION | CONFIRMED | booking.confirm |
+| markReady | CONFIRMED | READY_FOR_PICKUP | booking.confirm |
+| checkOut | READY_FOR_PICKUP | ACTIVE | booking.confirm |
+| requestReturn | ACTIVE | RETURN_PENDING | booking.return |
+| completeReturn | RETURN_PENDING | RETURNED | booking.return |
+| openSettlement | RETURNED | SETTLEMENT_PENDING | booking.return |
+| complete | SETTLEMENT_PENDING | COMPLETED | booking.return |
+| cancel | DRAFT, HOLD, PENDING_CONFIRMATION, CONFIRMED, READY_FOR_PICKUP | CANCELLED | booking.cancel |
+| reject | PENDING_CONFIRMATION | REJECTED | booking.confirm |
+| expire | HOLD | EXPIRED | booking.cancel |
+| markNoShow | READY_FOR_PICKUP | NO_SHOW | booking.confirm |
+
+Command preconditions implemented in 05-C (further lifecycle policy lands
+in 05-D and the payments phase, 09):
+
+- **requestConfirmation** attaches the customer identity and the pricing
+  quote; the quote must be tenant-owned, target-matching and unexpired.
+- **confirm** requires the customer, re-checks the interval (guard-exempt
+  conflict re-check + live hold for vehicle bookings; remaining capacity
+  for category bookings), refreshes the vehicle hold to the interval end,
+  and captures the immutable price snapshot (05-B06) from the quote —
+  pricing is null until the pricing engine (PHASE-06).
+- **markReady/checkOut** require a physical vehicle assignment; check-out
+  consumes the hold.
+- **cancel/reject/noShow** require a documented reason and release the
+  hold; refund/fee policy evaluation is 05-D01/D02.
+- **expire** is allowed only once the booking's own hold has actually
+  expired; automated hold expiration is 05-D03.
+- **complete** is the explicit, audited close; financial settlement
+  conditions are enforced with the payments phase (09).

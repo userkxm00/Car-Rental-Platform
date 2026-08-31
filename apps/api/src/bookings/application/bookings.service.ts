@@ -11,6 +11,11 @@ import {
   type BookingRequestInput,
   type ValidatedBookingRequest,
 } from '../domain/booking-rules';
+import {
+  InvalidTransitionError,
+  resolveTransition,
+  type BookingTransition,
+} from '../domain/booking-transitions';
 import { BookingsRepository, type BookingWithHistory } from '../infrastructure/bookings.repository';
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -222,6 +227,398 @@ export class BookingsService {
   async listBookings(tenantId: string): Promise<BookingResponse[]> {
     const rows = await this.repository.listForTenant(tenantId);
     return rows.map((row) => this.toResponse(row));
+  }
+
+  /**
+   * 05-C01/C02: attach the customer and/or the quote that prices the
+   * booking, then move DRAFT|HOLD → PENDING_CONFIRMATION.
+   */
+  async requestConfirmation(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    body: { customerId?: string; quoteId?: string },
+  ): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'requestConfirmation');
+
+    const customerId = body.customerId ?? booking.customerId ?? null;
+    const quoteId = body.quoteId ?? booking.quoteId ?? null;
+    if (quoteId) {
+      const quote = await this.repository.findQuoteInTenant(tenantId, quoteId);
+      if (!quote) {
+        throw new NotFoundException({
+          code: BookingErrorCode.BOOKING_QUOTE_MISMATCH,
+          message: 'Quote not found in this agency.',
+        });
+      }
+      const targetMatches =
+        (booking.inventoryMode === 'VEHICLE' && quote.vehicleId === booking.assignedVehicleId) ||
+        (booking.inventoryMode === 'CATEGORY' && quote.categoryId === booking.requestedCategoryId);
+      if (!targetMatches) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_QUOTE_MISMATCH,
+          message: 'Quote target does not match the booking target.',
+        });
+      }
+      if (quote.expiresAt.getTime() <= Date.now()) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_QUOTE_MISMATCH,
+          message: 'Quote has expired — request a fresh quote.',
+        });
+      }
+    }
+
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.request_confirmation',
+      data: { customerId, quoteId },
+    });
+    return this.toResponse(row);
+  }
+
+  /**
+   * 05-C03: confirm PENDING_CONFIRMATION → CONFIRMED. Preconditions: the
+   * customer is known, the inventory is still safe (vehicle: guard-exempt
+   * conflict re-check + live hold; category: remaining capacity), and the
+   * commercial snapshot (05-B06) is captured from the linked quote (null
+   * until the pricing engine, PHASE-06). The vehicle hold is refreshed to
+   * cover the full rental interval.
+   */
+  async confirmBooking(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'confirm');
+
+    if (!booking.customerId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_CUSTOMER_REQUIRED,
+        message: 'Confirmation requires the customer identity.',
+      });
+    }
+
+    const interval = { start: booking.startsAt, end: booking.endsAt };
+    if (booking.inventoryMode === 'VEHICLE') {
+      if (!booking.assignedVehicleId) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_ASSIGNMENT_REQUIRED,
+          message: 'Confirmation requires an assigned vehicle.',
+        });
+      }
+      const hold = await this.repository.findActiveHold(bookingId);
+      if (!hold) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_HOLD_NOT_ACTIVE,
+          message: 'No live hold — place a hold before confirming.',
+        });
+      }
+      const conflicts = await this.repository.conflictingCommitmentsExcludingHold(
+        booking.assignedVehicleId,
+        interval,
+        hold.id,
+      );
+      if (conflicts.length > 0) {
+        throw new ConflictException({
+          code: BookingErrorCode.INTERVAL_CONFLICT,
+          message: 'Interval is no longer safe to confirm.',
+        });
+      }
+      await this.repository.updateBookingHold({
+        vehicleId: booking.assignedVehicleId,
+        holdId: hold.id,
+        status: 'ACTIVE',
+        expiresAt: booking.endsAt,
+      });
+    } else {
+      const capacity = await this.availability.categoryCapacity(
+        tenantId,
+        booking.requestedCategoryId as string,
+        interval,
+        { pickupBranchId: booking.pickupBranchId ?? undefined },
+      );
+      if (capacity.available < 1) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_UNAVAILABLE,
+          message: 'No remaining category capacity at confirmation.',
+        });
+      }
+    }
+
+    // 05-B06: capture the immutable commercial snapshot from the quote.
+    const pricing = booking.quoteId
+      ? await this.repository.findQuotePricing(tenantId, booking.quoteId)
+      : null;
+
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.confirmed',
+    });
+    if (booking.quoteId) {
+      await this.repository.capturePriceSnapshot(bookingId, pricing);
+    }
+    return this.toResponse(row);
+  }
+
+  /** 05-C05: CONFIRMED → READY_FOR_PICKUP (preparation completed). */
+  async markReady(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'markReady');
+    if (!booking.assignedVehicleId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_ASSIGNMENT_REQUIRED,
+        message: 'A physical vehicle must be assigned before pickup (05-D07).',
+      });
+    }
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.ready_for_pickup',
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C06: READY_FOR_PICKUP → ACTIVE (pickup/check-out) — consumes the hold. */
+  async checkOut(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'checkOut');
+    if (!booking.assignedVehicleId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_ASSIGNMENT_REQUIRED,
+        message: 'Check-out requires an assigned vehicle.',
+      });
+    }
+    const hold = await this.repository.findActiveHold(bookingId);
+    if (hold?.vehicleId) {
+      await this.repository.updateBookingHold({
+        vehicleId: hold.vehicleId,
+        holdId: hold.id,
+        status: 'CONSUMED',
+      });
+    }
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.checked_out',
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C07: ACTIVE → RETURN_PENDING (return requested/notified). */
+  async requestReturn(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'requestReturn');
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.return_requested',
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C08: RETURN_PENDING → RETURNED (vehicle physically returned). */
+  async completeReturn(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'completeReturn');
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.returned',
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C09: RETURNED → SETTLEMENT_PENDING (settlement opened). */
+  async openSettlement(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'openSettlement');
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.settlement_opened',
+    });
+    return this.toResponse(row);
+  }
+
+  /**
+   * 05-C10: SETTLEMENT_PENDING → COMPLETED. Financial settlement
+   * conditions are enforced with the payments phase (PHASE-09); this
+   * command is the explicit, audited close of the lifecycle.
+   */
+  async completeBooking(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'complete');
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.completed',
+    });
+    return this.toResponse(row);
+  }
+
+  /**
+   * 05-C11: exceptional states. Cancel releases the hold; policy/refund
+   * evaluation lands with 05-D01/D02.
+   */
+  async cancelBooking(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    reason: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'cancel');
+    this.requireReason(reason);
+    await this.releaseHoldIfAny(bookingId);
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: `booking.cancelled:${reason}`,
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C11: PENDING_CONFIRMATION → REJECTED (agency declines). */
+  async rejectBooking(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    reason: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'reject');
+    this.requireReason(reason);
+    await this.releaseHoldIfAny(bookingId);
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: `booking.rejected:${reason}`,
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C11: HOLD → EXPIRED once the booking's own hold has expired. */
+  async expireBooking(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'expire');
+    const hold = await this.repository.findActiveHold(bookingId);
+    if (!hold) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_HOLD_NOT_ACTIVE,
+        message: 'No live hold to expire.',
+      });
+    }
+    if (hold.expiresAt.getTime() > Date.now()) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_HOLD_NOT_EXPIRED,
+        message: 'Hold has not expired yet.',
+      });
+    }
+    await this.repository.updateBookingHold({
+      vehicleId: hold.vehicleId as string,
+      holdId: hold.id,
+      status: 'EXPIRED',
+    });
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: 'booking.hold_expired',
+    });
+    return this.toResponse(row);
+  }
+
+  /** 05-C11: READY_FOR_PICKUP → NO_SHOW (documented policy outcome). */
+  async markNoShow(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    reason: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    const { to } = this.resolve(booking, 'markNoShow');
+    this.requireReason(reason);
+    await this.releaseHoldIfAny(bookingId);
+    const row = await this.repository.applyTransition({
+      bookingId,
+      from: booking.status,
+      to,
+      actorUserId,
+      reason: `booking.no_show:${reason}`,
+    });
+    return this.toResponse(row);
+  }
+
+  private async requireBooking(tenantId: string, bookingId: string): Promise<BookingWithHistory> {
+    const booking = await this.repository.findInTenant(tenantId, bookingId);
+    if (!booking) {
+      throw new NotFoundException({
+        code: BookingErrorCode.BOOKING_NOT_FOUND,
+        message: 'Booking not found in this agency.',
+      });
+    }
+    return booking;
+  }
+
+  private requireReason(reason: string): void {
+    if (typeof reason !== 'string' || reason.trim().length === 0) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_REASON_REQUIRED,
+        message: 'A reason is required for this transition.',
+      });
+    }
+  }
+
+  private async releaseHoldIfAny(bookingId: string): Promise<void> {
+    const hold = await this.repository.findActiveHold(bookingId);
+    if (hold?.vehicleId) {
+      await this.repository.updateBookingHold({
+        vehicleId: hold.vehicleId,
+        holdId: hold.id,
+        status: 'RELEASED',
+      });
+    }
+  }
+
+  /** Resolves a command with the stable API error for invalid moves. */
+  private resolve(booking: BookingWithHistory, command: string): BookingTransition {
+    try {
+      return resolveTransition(booking.status, command);
+    } catch (error) {
+      return this.transitionError(error);
+    }
+  }
+
+  /** Maps a domain transition rejection to the stable API error. */
+  private transitionError(error: unknown): never {
+    if (error instanceof InvalidTransitionError) {
+      throw new ConflictException({
+        code: error.code,
+        message: error.message,
+      });
+    }
+    throw error;
   }
 
   /**
