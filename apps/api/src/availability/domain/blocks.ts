@@ -35,6 +35,22 @@ export type BlockStatus = (typeof BLOCK_STATUSES)[number];
 
 export const AVAILABILITY_BLOCKING_STATUSES: readonly BlockStatus[] = ['SCHEDULED', 'ACTIVE'];
 
+/**
+ * Explicit block lifecycle (04-A02): SCHEDULED → ACTIVE → COMPLETED, with
+ * CANCELLED reachable from the pre-completion states only; completed and
+ * cancelled blocks are terminal.
+ */
+export const BLOCK_TRANSITIONS: Readonly<Record<BlockStatus, readonly BlockStatus[]>> = {
+  SCHEDULED: ['ACTIVE', 'COMPLETED', 'CANCELLED'],
+  ACTIVE: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+export function isValidBlockTransition(from: BlockStatus, to: BlockStatus): boolean {
+  return BLOCK_TRANSITIONS[from].includes(to);
+}
+
 export interface VehicleBlockInterval extends AvailabilityInterval {
   blockType: BlockType;
   status: BlockStatus;
