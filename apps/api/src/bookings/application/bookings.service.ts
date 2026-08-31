@@ -4,6 +4,7 @@ import { APP_ENV } from '../../config/app-env.token';
 import { AvailabilityService } from '../../availability/application/availability.service';
 import { LocationContextService } from '../../availability/application/location-context.service';
 import { IntervalConflictError } from '../../availability/infrastructure/commitment-guard';
+import { parseUtcInstant } from '../../availability/domain/timezone-boundary';
 import {
   BOOKING_CHANNELS,
   BookingErrorCode,
@@ -11,12 +12,18 @@ import {
   type BookingRequestInput,
   type ValidatedBookingRequest,
 } from '../domain/booking-rules';
+import { Prisma } from '@prisma/client';
 import {
   InvalidTransitionError,
   resolveTransition,
   type BookingTransition,
 } from '../domain/booking-transitions';
-import { BookingsRepository, type BookingWithHistory } from '../infrastructure/bookings.repository';
+import {
+  BookingsRepository,
+  ReplayedCommandError,
+  type BookingWithHistory,
+  type IdempotencyScope,
+} from '../infrastructure/bookings.repository';
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -88,7 +95,9 @@ export class BookingsService {
   validateBookingRequest(input: BookingRequestInput): ValidatedBookingRequest {
     const { start, end } = this.availability.validateRequestInterval(input.start, input.end);
 
-    if (start.getTime() <= Date.now()) {
+    // 05-D08: walk-ins start at the counter; anything else must be planned
+    // for the future (a 1-minute tolerance absorbs scheduling jitter).
+    if (start.getTime() <= Date.now() && (input.channel ?? 'AGENCY_WEB') !== 'WALK_IN') {
       throw new ConflictException({
         code: BookingErrorCode.INTERVAL_IN_PAST,
         message: 'Booking start must be in the future.',
@@ -136,7 +145,13 @@ export class BookingsService {
     tenantId: string,
     createdBy: string | null,
     input: BookingRequestInput,
+    idempotencyKey?: string,
   ): Promise<BookingResponse> {
+    const scope = this.idempotencyScope(tenantId, createdBy, 'booking.create', idempotencyKey);
+    const replayed = await this.replayIfPresent(tenantId, scope);
+    if (replayed) {
+      return replayed;
+    }
     const request = this.validateBookingRequest(input);
 
     const context = await this.locationContext.resolve(tenantId, {
@@ -147,20 +162,27 @@ export class BookingsService {
 
     await this.assertBookable(tenantId, request, context);
 
-    const row = await this.repository.create({
-      tenantId,
-      createdBy,
-      channel: request.channel,
-      mode: request.mode,
-      vehicleId: request.vehicleId,
-      categoryId: request.categoryId,
-      pickupBranchId: request.pickupBranchId,
-      returnBranchId: request.returnBranchId,
-      deliveryZoneId: request.deliveryZoneId,
-      start: request.start,
-      end: request.end,
-    });
-    return this.toResponse(row);
+    try {
+      const row = await this.repository.create(
+        {
+          tenantId,
+          createdBy,
+          channel: request.channel,
+          mode: request.mode,
+          vehicleId: request.vehicleId,
+          categoryId: request.categoryId,
+          pickupBranchId: request.pickupBranchId,
+          returnBranchId: request.returnBranchId,
+          deliveryZoneId: request.deliveryZoneId,
+          start: request.start,
+          end: request.end,
+        },
+        scope,
+      );
+      return this.toResponse(row);
+    } catch (error) {
+      return this.replayOrThrow(tenantId, error, scope);
+    }
   }
 
   /** 05-B05: place the inventory hold for a DRAFT vehicle booking. */
@@ -168,7 +190,13 @@ export class BookingsService {
     tenantId: string,
     actorUserId: string | null,
     bookingId: string,
+    idempotencyKey?: string,
   ): Promise<BookingResponse> {
+    const scope = this.idempotencyScope(tenantId, actorUserId, 'booking.hold', idempotencyKey);
+    const replayed = await this.replayIfPresent(tenantId, scope);
+    if (replayed) {
+      return replayed;
+    }
     const row = await this.repository.findInTenant(tenantId, bookingId);
     if (!row) {
       throw new NotFoundException({
@@ -191,16 +219,19 @@ export class BookingsService {
 
     const expiresAt = new Date(Date.now() + this.env.HOLD_TTL_MINUTES * 60_000);
     try {
-      const updated = await this.repository.placeBookingHold({
-        tenantId,
-        bookingId,
-        vehicleId: row.assignedVehicleId,
-        channel: row.channel,
-        start: row.startsAt,
-        end: row.endsAt,
-        expiresAt,
-        createdBy: actorUserId,
-      });
+      const updated = await this.repository.placeBookingHold(
+        {
+          tenantId,
+          bookingId,
+          vehicleId: row.assignedVehicleId,
+          channel: row.channel,
+          start: row.startsAt,
+          end: row.endsAt,
+          expiresAt,
+          createdBy: actorUserId,
+        },
+        scope,
+      );
       return this.toResponse(updated);
     } catch (error) {
       if (error instanceof IntervalConflictError) {
@@ -209,7 +240,7 @@ export class BookingsService {
           message: error.message,
         });
       }
-      throw error;
+      return this.replayOrThrow(tenantId, error, scope);
     }
   }
 
@@ -288,11 +319,23 @@ export class BookingsService {
    * until the pricing engine, PHASE-06). The vehicle hold is refreshed to
    * cover the full rental interval.
    */
-  async confirmBooking(tenantId: string, actorUserId: string | null, bookingId: string): Promise<BookingResponse> {
+  async confirmBooking(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    idempotencyKey?: string,
+  ): Promise<BookingResponse> {
+    const scope = this.idempotencyScope(tenantId, actorUserId, 'booking.confirm', idempotencyKey);
+    const replayed = await this.replayIfPresent(tenantId, scope);
+    if (replayed) {
+      return replayed;
+    }
     const booking = await this.requireBooking(tenantId, bookingId);
     const { to } = this.resolve(booking, 'confirm');
 
-    if (!booking.customerId) {
+    // 05-D08: walk-in bookings confirm without a customer identity; the
+    // customer attaches with the contract workflow (PHASE-08).
+    if (!booking.customerId && booking.channel !== 'WALK_IN') {
       throw new ConflictException({
         code: BookingErrorCode.BOOKING_CUSTOMER_REQUIRED,
         message: 'Confirmation requires the customer identity.',
@@ -351,17 +394,24 @@ export class BookingsService {
       ? await this.repository.findQuotePricing(tenantId, booking.quoteId)
       : null;
 
-    const row = await this.repository.applyTransition({
-      bookingId,
-      from: booking.status,
-      to,
-      actorUserId,
-      reason: 'booking.confirmed',
-    });
-    if (booking.quoteId) {
-      await this.repository.capturePriceSnapshot(bookingId, pricing);
+    try {
+      const row = await this.repository.applyTransition(
+        {
+          bookingId,
+          from: booking.status,
+          to,
+          actorUserId,
+          reason: 'booking.confirmed',
+        },
+        scope,
+      );
+      if (booking.quoteId) {
+        await this.repository.capturePriceSnapshot(bookingId, pricing);
+      }
+      return this.toResponse(row);
+    } catch (error) {
+      return this.replayOrThrow(tenantId, error, scope);
     }
-    return this.toResponse(row);
   }
 
   /** 05-C05: CONFIRMED → READY_FOR_PICKUP (preparation completed). */
@@ -473,25 +523,28 @@ export class BookingsService {
   }
 
   /**
-   * 05-C11: exceptional states. Cancel releases the hold; policy/refund
-   * evaluation lands with 05-D01/D02.
+   * 05-D01/D02: cancel with the initiator recorded on a policy row — the
+   * hold is released, the status transitions and the cancellation record
+   * land with the audit history. Refund/fee evaluation arrives with the
+   * payments phase (09).
    */
   async cancelBooking(
     tenantId: string,
     actorUserId: string | null,
     bookingId: string,
     reason: string,
+    initiator: 'CUSTOMER' | 'AGENCY' = 'AGENCY',
   ): Promise<BookingResponse> {
     const booking = await this.requireBooking(tenantId, bookingId);
-    const { to } = this.resolve(booking, 'cancel');
+    this.resolve(booking, 'cancel');
     this.requireReason(reason);
     await this.releaseHoldIfAny(bookingId);
-    const row = await this.repository.applyTransition({
+    const row = await this.repository.cancelWithRecord({
       bookingId,
       from: booking.status,
-      to,
       actorUserId,
-      reason: `booking.cancelled:${reason}`,
+      reason,
+      initiator,
     });
     return this.toResponse(row);
   }
@@ -549,7 +602,10 @@ export class BookingsService {
     return this.toResponse(row);
   }
 
-  /** 05-C11: READY_FOR_PICKUP → NO_SHOW (documented policy outcome). */
+  /**
+   * 05-D04: READY_FOR_PICKUP → NO_SHOW — the documented policy outcome is
+   * only available once the pickup instant has passed.
+   */
   async markNoShow(
     tenantId: string,
     actorUserId: string | null,
@@ -559,6 +615,12 @@ export class BookingsService {
     const booking = await this.requireBooking(tenantId, bookingId);
     const { to } = this.resolve(booking, 'markNoShow');
     this.requireReason(reason);
+    if (booking.startsAt.getTime() > Date.now()) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_INVALID_TRANSITION,
+        message: 'No-show is only possible after the pickup instant.',
+      });
+    }
     await this.releaseHoldIfAny(bookingId);
     const row = await this.repository.applyTransition({
       bookingId,
@@ -568,6 +630,413 @@ export class BookingsService {
       reason: `booking.no_show:${reason}`,
     });
     return this.toResponse(row);
+  }
+
+  /**
+   * 05-D05: request a rental extension. The new end must be after the
+   * current end, and the extension interval is availability-checked
+   * immediately (05-D06) — a conflict is a stable 409 and nothing is
+   * persisted. Pricing for the extension arrives with PHASE-06.
+   */
+  async requestExtension(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    body: { end?: string; reason?: string },
+    idempotencyKey?: string,
+  ): Promise<{ extensionId: string; status: string; requestedEndsAt: string; originalEndsAt: string }> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    this.resolve(booking, 'requestExtension');
+    const requestedEnd = parseUtcInstant(body.end ?? '');
+    if (!requestedEnd || requestedEnd.getTime() <= booking.endsAt.getTime()) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_EXTENSION_END_INVALID,
+        message: 'Extension end must be strictly after the current rental end.',
+      });
+    }
+
+    const ownHold = await this.repository.findActiveHold(bookingId);
+    await this.assertExtensionAvailable(
+      tenantId,
+      { start: booking.endsAt, end: requestedEnd },
+      booking.inventoryMode,
+      booking.assignedVehicleId,
+      booking.requestedCategoryId,
+      booking.pickupBranchId,
+      ownHold?.id ?? null,
+    );
+
+    const scope = this.idempotencyScope(tenantId, actorUserId, 'booking.extend', idempotencyKey);
+    try {
+      const extension = await this.repository.createExtension(
+        {
+          bookingId,
+          originalEndsAt: booking.endsAt,
+          requestedEndsAt: requestedEnd,
+          reason: typeof body.reason === 'string' && body.reason.trim() ? body.reason.trim() : null,
+          requestedBy: actorUserId,
+        },
+        scope,
+      );
+      return {
+        extensionId: extension.id,
+        status: extension.status,
+        requestedEndsAt: extension.requestedEndsAt.toISOString(),
+        originalEndsAt: extension.originalEndsAt.toISOString(),
+      };
+    } catch (error) {
+      const replayedBookingId = await this.replayedBookingId(error, scope);
+      if (replayedBookingId) {
+        // Return the extension that was stored for the replayed request.
+        const extension = await this.repository.findLatestExtension(replayedBookingId);
+        if (extension) {
+          return {
+            extensionId: extension.id,
+            status: extension.status,
+            requestedEndsAt: extension.requestedEndsAt.toISOString(),
+            originalEndsAt: extension.originalEndsAt.toISOString(),
+          };
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 05-D06: approve an extension — re-checks the interval under the
+   * commitment guard, extends the hold and the booking interval, and audits
+   * the decision. Conflicts surface as INTERVAL_CONFLICT.
+   */
+  async approveExtension(
+    tenantId: string,
+    actorUserId: string | null,
+    extensionId: string,
+  ): Promise<BookingResponse> {
+    const extension = await this.requireExtension(tenantId, extensionId);
+    if (extension.status !== 'REQUESTED') {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_EXTENSION_NOT_PENDING,
+        message: `Extension is ${extension.status} — only REQUESTED extensions can be approved.`,
+      });
+    }
+    if (extension.bookingStatus !== 'ACTIVE' || !extension.assignedVehicleId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_INVALID_TRANSITION,
+        message: 'Extensions can only be approved for active vehicle bookings.',
+      });
+    }
+    // An ACTIVE rental has no live hold (it was consumed at check-out);
+    // a live hold is extended when present (pre-active extensions).
+    const hold = await this.repository.findActiveHold(extension.bookingId);
+    await this.assertExtensionAvailable(
+      tenantId,
+      { start: extension.originalEndsAt, end: extension.requestedEndsAt },
+      extension.inventoryMode,
+      extension.assignedVehicleId,
+      extension.requestedCategoryId,
+      null,
+      hold?.id ?? null,
+    );
+    try {
+      await this.repository.approveExtension({
+        bookingId: extension.bookingId,
+        extensionId: extension.id,
+        vehicleId: extension.assignedVehicleId,
+        holdId: hold?.id ?? null,
+        newEndsAt: extension.requestedEndsAt,
+        originalEndsAt: extension.originalEndsAt,
+        decidedBy: actorUserId,
+      });
+    } catch (error) {
+      if (error instanceof IntervalConflictError) {
+        throw new ConflictException({
+          code: BookingErrorCode.INTERVAL_CONFLICT,
+          message: error.message,
+        });
+      }
+      throw error;
+    }
+    const booking = await this.requireBooking(tenantId, extension.bookingId);
+    return this.toResponse(booking);
+  }
+
+  /** 05-D06: reject an extension request (audited decision). */
+  async rejectExtension(
+    tenantId: string,
+    actorUserId: string | null,
+    extensionId: string,
+    reason: string,
+  ): Promise<{ extensionId: string; status: string }> {
+    const extension = await this.requireExtension(tenantId, extensionId);
+    if (extension.status !== 'REQUESTED') {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_EXTENSION_NOT_PENDING,
+        message: `Extension is ${extension.status} — only REQUESTED extensions can be rejected.`,
+      });
+    }
+    this.requireReason(reason);
+    await this.repository.rejectExtension({
+      bookingId: extension.bookingId,
+      extensionId: extension.id,
+      decidedBy: actorUserId,
+      reason,
+    });
+    return { extensionId: extension.id, status: 'REJECTED' };
+  }
+
+  /**
+   * 05-D07: reassign the booking to another vehicle before the rental is
+   * active. The target must be tenant-owned and free for the interval
+   * (own hold excluded); the hold moves under ordered row locks and the
+   * assignment history is recorded.
+   */
+  async reassignVehicle(
+    tenantId: string,
+    actorUserId: string | null,
+    bookingId: string,
+    body: { vehicleId?: string; reason?: string },
+  ): Promise<BookingResponse> {
+    const booking = await this.requireBooking(tenantId, bookingId);
+    if (!['HOLD', 'PENDING_CONFIRMATION', 'CONFIRMED', 'READY_FOR_PICKUP'].includes(booking.status)) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_INVALID_TRANSITION,
+        message: `Reassignment is not possible from ${booking.status}.`,
+      });
+    }
+    if (!booking.assignedVehicleId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_HOLD_UNSUPPORTED,
+        message: 'Category bookings are reassigned at assignment time (05-D07 vehicle booking scope).',
+      });
+    }
+    const target = typeof body.vehicleId === 'string' ? body.vehicleId : '';
+    if (!target || target === booking.assignedVehicleId) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_INVALID_TRANSITION,
+        message: 'A different target vehicle is required.',
+      });
+    }
+    const vehicle = await this.availability.findVehicleInTenant(tenantId, target);
+    if (!vehicle) {
+      throw new NotFoundException({
+        code: BookingErrorCode.VEHICLE_NOT_FOUND,
+        message: 'Vehicle not found in this agency.',
+      });
+    }
+    this.requireReason(body.reason ?? '');
+    const hold = await this.repository.findActiveHold(bookingId);
+    if (!hold) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_HOLD_NOT_ACTIVE,
+        message: 'No live hold to move.',
+      });
+    }
+    try {
+      const row = await this.repository.reassignVehicle({
+        tenantId,
+        bookingId,
+        fromVehicleId: booking.assignedVehicleId,
+        toVehicleId: target,
+        holdId: hold.id,
+        holdExpiresAt: hold.expiresAt,
+        holdChannel: booking.channel,
+        interval: { start: booking.startsAt, end: booking.endsAt },
+        actorUserId,
+        reason: body.reason ?? '',
+        fromStatus: booking.status,
+      });
+      return this.toResponse(row);
+    } catch (error) {
+      if (error instanceof IntervalConflictError) {
+        throw new ConflictException({
+          code: BookingErrorCode.INTERVAL_CONFLICT,
+          message: error.message,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 05-D08: walk-in booking — the same domain rules, executed as one
+   * chained command: create (start = now) → hold → request confirmation →
+   * confirm (customer optional for walk-ins) → ready → check-out.
+   */
+  async createWalkIn(
+    tenantId: string,
+    actorUserId: string | null,
+    body: { vehicleId?: string; end?: string; customerId?: string },
+  ): Promise<BookingResponse> {
+    const end = parseUtcInstant(body.end ?? '');
+    if (!end || end.getTime() <= Date.now()) {
+      throw new ConflictException({
+        code: BookingErrorCode.INVALID_INTERVAL,
+        message: 'Walk-in end must be a valid instant in the future.',
+      });
+    }
+    const start = new Date();
+    const input: BookingRequestInput = {
+      channel: 'WALK_IN',
+      vehicleId: body.vehicleId,
+      start: start.toISOString(),
+      end: end.toISOString(),
+    };
+    const created = await this.createBooking(tenantId, actorUserId, input);
+    const held = await this.placeBookingHold(tenantId, actorUserId, created.bookingId);
+    const pending = await this.requestConfirmation(tenantId, actorUserId, created.bookingId, {
+      customerId: body.customerId,
+    });
+    void pending;
+    const confirmed = await this.confirmBooking(tenantId, actorUserId, created.bookingId);
+    await this.markReady(tenantId, actorUserId, created.bookingId);
+    const active = await this.checkOut(tenantId, actorUserId, created.bookingId);
+    void held;
+    void confirmed;
+    return active;
+  }
+
+  /** 05-D03: manual sweep of expired holds — bookings move HOLD→EXPIRED. */
+  async expireStaleHoldSweep(tenantId: string, actorUserId: string | null): Promise<{ expired: number }> {
+    const expired = await this.repository.sweepExpiredHolds(tenantId);
+    void actorUserId;
+    return { expired };
+  }
+
+  /** 05-D06: interval safety for extension intervals — own hold excluded. */
+  private async assertExtensionAvailable(
+    tenantId: string,
+    interval: { start: Date; end: Date },
+    inventoryMode: string,
+    assignedVehicleId: string | null,
+    requestedCategoryId: string | null,
+    pickupBranchId: string | null,
+    excludeHoldId: string | null,
+  ): Promise<void> {
+    if (inventoryMode === 'VEHICLE') {
+      if (!assignedVehicleId) {
+        throw new ConflictException({
+          code: BookingErrorCode.BOOKING_ASSIGNMENT_REQUIRED,
+          message: 'Extension requires an assigned vehicle.',
+        });
+      }
+      const conflicts = await this.repository.conflictingCommitmentsExcludingHold(
+        assignedVehicleId,
+        interval,
+        excludeHoldId,
+      );
+      if (conflicts.length > 0) {
+        throw new ConflictException({
+          code: BookingErrorCode.INTERVAL_CONFLICT,
+          message: 'Extension interval conflicts with other commitments.',
+        });
+      }
+      return;
+    }
+    const capacity = await this.availability.categoryCapacity(
+      tenantId,
+      requestedCategoryId as string,
+      interval,
+      { pickupBranchId: pickupBranchId ?? undefined },
+    );
+    if (capacity.available < 1) {
+      throw new ConflictException({
+        code: BookingErrorCode.BOOKING_UNAVAILABLE,
+        message: 'No remaining category capacity for the extension interval.',
+      });
+    }
+  }
+
+  private async requireExtension(
+    tenantId: string,
+    extensionId: string,
+  ): Promise<{
+    id: string;
+    bookingId: string;
+    status: string;
+    originalEndsAt: Date;
+    requestedEndsAt: Date;
+    bookingEndsAt: Date;
+    bookingStatus: string;
+    inventoryMode: string;
+    assignedVehicleId: string | null;
+    requestedCategoryId: string | null;
+  }> {
+    const extension = await this.repository.findExtensionInTenant(tenantId, extensionId);
+    if (!extension) {
+      throw new NotFoundException({
+        code: BookingErrorCode.BOOKING_EXTENSION_NOT_FOUND,
+        message: 'Extension not found in this agency.',
+      });
+    }
+    return extension;
+  }
+
+  /**
+   * 05-D09: early replay check — a stored idempotency record returns the
+   * original result before command validation runs (state commands fail
+   * their transition check on a second pass).
+   */
+  private async replayIfPresent(
+    tenantId: string,
+    scope: IdempotencyScope | null,
+  ): Promise<BookingResponse | null> {
+    if (!scope) {
+      return null;
+    }
+    const record = await this.repository.findIdempotencyRecord(scope);
+    if (!record?.bookingId) {
+      return null;
+    }
+    const booking = await this.requireBooking(tenantId, record.bookingId);
+    return this.toResponse(booking);
+  }
+
+  /** 05-D09: builds the idempotency scope (actor + command + key). */
+  private idempotencyScope(
+    tenantId: string,
+    actorUserId: string | null,
+    command: string,
+    idempotencyKey?: string,
+  ): IdempotencyScope | null {
+    if (!idempotencyKey || !actorUserId) {
+      return null;
+    }
+    return { tenantId, actorUserId, command, idempotencyKey };
+  }
+
+  /** 05-D09: on replay, return the original result instead of failing. */
+  private async replayOrThrow(
+    tenantId: string,
+    error: unknown,
+    scope: IdempotencyScope | null,
+  ): Promise<BookingResponse> {
+    const bookingId = await this.replayedBookingId(error, scope);
+    if (bookingId) {
+      const booking = await this.requireBooking(tenantId, bookingId);
+      return this.toResponse(booking);
+    }
+    throw error;
+  }
+
+  /** 05-D09: resolves the original booking for a replayed command. */
+  private async replayedBookingId(
+    error: unknown,
+    scope: IdempotencyScope | null,
+  ): Promise<string | null> {
+    if (!scope) {
+      return null;
+    }
+    const isUniqueViolation =
+      error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+    const isReplay = error instanceof ReplayedCommandError;
+    if (!isUniqueViolation && !isReplay) {
+      return null;
+    }
+    if (isReplay && error.bookingId) {
+      return error.bookingId;
+    }
+    const record = await this.repository.findIdempotencyRecord(scope);
+    return record?.bookingId ?? null;
   }
 
   private async requireBooking(tenantId: string, bookingId: string): Promise<BookingWithHistory> {

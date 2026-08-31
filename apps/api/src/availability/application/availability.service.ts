@@ -25,6 +25,14 @@ import { AvailabilityRepository } from '../infrastructure/availability.repositor
 export class AvailabilityService {
   constructor(private readonly repository: AvailabilityRepository) {}
 
+  /** Tenant-scoped vehicle existence + lifecycle (quote/booking targets). */
+  async findVehicleInTenant(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<{ id: string; status: string; currentBranchId: string | null } | null> {
+    return this.repository.findVehicleInTenant(tenantId, vehicleId);
+  }
+
   /**
    * Tenant-scoped category existence + activity flag. Used by quote
    * eligibility (05-A02) — an inactive category is not quotable.

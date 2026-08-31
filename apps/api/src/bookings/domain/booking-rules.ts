@@ -50,6 +50,11 @@ export const BookingErrorCode = {
   BOOKING_REASON_REQUIRED: 'BOOKING_REASON_REQUIRED',
   /** The booking's own hold has not expired yet. */
   BOOKING_HOLD_NOT_EXPIRED: 'BOOKING_HOLD_NOT_EXPIRED',
+  BOOKING_EXTENSION_NOT_FOUND: 'BOOKING_EXTENSION_NOT_FOUND',
+  /** The requested extension end is not after the current end. */
+  BOOKING_EXTENSION_END_INVALID: 'BOOKING_EXTENSION_END_INVALID',
+  /** The extension is not REQUESTED any more (already decided). */
+  BOOKING_EXTENSION_NOT_PENDING: 'BOOKING_EXTENSION_NOT_PENDING',
 } as const;
 
 export type BookingErrorCodeValue = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];

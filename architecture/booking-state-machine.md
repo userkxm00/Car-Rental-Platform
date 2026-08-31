@@ -210,6 +210,7 @@ overdue are records (05-D), never statuses.
 | reject | PENDING_CONFIRMATION | REJECTED | booking.confirm |
 | expire | HOLD | EXPIRED | booking.cancel |
 | markNoShow | READY_FOR_PICKUP | NO_SHOW | booking.confirm |
+| requestExtension | ACTIVE | ACTIVE (interval extended on approval) | booking.extend |
 
 Command preconditions implemented in 05-C (further lifecycle policy lands
 in 05-D and the payments phase, 09):
@@ -224,8 +225,47 @@ in 05-D and the payments phase, 09):
 - **markReady/checkOut** require a physical vehicle assignment; check-out
   consumes the hold.
 - **cancel/reject/noShow** require a documented reason and release the
-  hold; refund/fee policy evaluation is 05-D01/D02.
+  hold; the cancellation record (05-D01/D02) stores initiator + reason
+  with the policy version/financial-result slots for phases 06/09.
 - **expire** is allowed only once the booking's own hold has actually
-  expired; automated hold expiration is 05-D03.
+  expired; the automated sweep (05-D03) moves HOLD bookings with expired
+  holds to EXPIRED under the vehicle commitment lock.
 - **complete** is the explicit, audited close; financial settlement
   conditions are enforced with the payments phase (09).
+
+## Lifecycle records (05-D)
+
+Lifecycle facts that are decisions, not states, are stored on their own
+append-only rows (`booking_extensions`, `booking_cancellations`,
+`booking_assignments`, `booking_idempotency_records`) — the booking row
+itself is never rewritten for them:
+
+- **Extensions (05-D05/D06)**: `REQUESTED → APPROVED/REJECTED` records
+  carry `originalEndsAt` + `requestedEndsAt` + `pricingJson`; the original
+  interval snapshot is never rewritten. Requests re-check the extension
+  interval against the commitment guard (own hold excluded) — conflicts
+  are stable 409s and nothing is persisted. Approval re-checks under the
+  guard, extends the hold (when live) and `bookings.endsAt`, and appends
+  an `ACTIVE→ACTIVE` history entry with `booking.extended:{id}`.
+- **Cancellation policy (05-D01/D02)**: the initiator
+  (`CUSTOMER`/`AGENCY`), reason and actor are stored per cancellation;
+  `policyVersion` + `financialResultJson` slots wait for the pricing
+  (06) and payments (09) phases — today refund evaluation is documented,
+  not enforced.
+- **No-show (05-D04)**: `READY_FOR_PICKUP → NO_SHOW` is only available
+  once the pickup instant has passed.
+- **Reassignment (05-D07)**: before the rental, the hold moves to another
+  tenant-owned vehicle under ordered row locks on both vehicles; the
+  assignment history records from/to/reason/actor. Category bookings are
+  reassigned at assignment time, not via this command.
+- **Walk-in (05-D08)**: `createWalkIn` chains the domain commands
+  (create → hold → requestConfirmation → confirm → ready → checkOut) for
+  an immediate rental; walk-ins confirm without a customer identity —
+  the customer attaches with the contract workflow (08).
+- **Idempotent commands (05-D09)**: `create`/`hold`/`confirm`/extension
+  requests accept an `Idempotency-Key`; results are replayed from
+  `booking_idempotency_records` (unique per tenant × actor × command ×
+  key) — replays return the original result and write nothing twice.
+- **Audit (05-D10)**: every lifecycle fact (cancellation, sweep, no-show,
+  extension decision, reassignment) appends to `booking_status_history`
+  in the same transaction as the data change.

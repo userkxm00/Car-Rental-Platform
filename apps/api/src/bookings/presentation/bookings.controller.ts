@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthUserId } from '../../authorization/guard/permission.guard';
 import { PermissionGuard, RequirePermission } from '../../authorization/guard/permission.guard';
 import { AgencyScopeGuard } from '../../authorization/scope/tenant-scope';
@@ -33,8 +33,33 @@ export class BookingsController {
     @Param('agencyId') agencyId: string,
     @AuthUserId() userId: string,
     @Body() body: BookingRequestInput,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<BookingResponse> {
-    return this.service.createBooking(agencyId, userId, body ?? {});
+    return this.service.createBooking(agencyId, userId, body ?? {}, idempotencyKey);
+  }
+
+  /** 05-D08: walk-in booking — the chained domain commands for an immediate rental. */
+  @Post('walk-in')
+  @HttpCode(201)
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CREATE, Permission.BOOKING_CONFIRM)
+  async walkIn(
+    @Param('agencyId') agencyId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { vehicleId?: string; end?: string; customerId?: string },
+  ): Promise<BookingResponse> {
+    return this.service.createWalkIn(agencyId, userId, body ?? {});
+  }
+
+  /** 05-D03: manual sweep of expired holds (scheduled automation arrives with background jobs). */
+  @Post('expire-stale-holds')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CANCEL)
+  async expireStaleHolds(
+    @Param('agencyId') agencyId: string,
+    @AuthUserId() userId: string,
+  ): Promise<{ expired: number }> {
+    return this.service.expireStaleHoldSweep(agencyId, userId);
   }
 
   @Post(':bookingId/hold')
@@ -44,8 +69,9 @@ export class BookingsController {
     @Param('agencyId') agencyId: string,
     @Param('bookingId') bookingId: string,
     @AuthUserId() userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<BookingResponse> {
-    return this.service.placeBookingHold(agencyId, userId, bookingId);
+    return this.service.placeBookingHold(agencyId, userId, bookingId, idempotencyKey);
   }
 
   /**
@@ -72,8 +98,9 @@ export class BookingsController {
     @Param('agencyId') agencyId: string,
     @Param('bookingId') bookingId: string,
     @AuthUserId() userId: string,
+    @Headers('Idempotency-Key') idempotencyKey?: string,
   ): Promise<BookingResponse> {
-    return this.service.confirmBooking(agencyId, userId, bookingId);
+    return this.service.confirmBooking(agencyId, userId, bookingId, idempotencyKey);
   }
 
   @Post(':bookingId/ready')
@@ -149,9 +176,68 @@ export class BookingsController {
     @Param('agencyId') agencyId: string,
     @Param('bookingId') bookingId: string,
     @AuthUserId() userId: string,
-    @Body() body: { reason?: string },
+    @Body() body: { reason?: string; initiator?: 'CUSTOMER' | 'AGENCY' },
   ): Promise<BookingResponse> {
-    return this.service.cancelBooking(agencyId, userId, bookingId, body?.reason ?? '');
+    return this.service.cancelBooking(
+      agencyId,
+      userId,
+      bookingId,
+      body?.reason ?? '',
+      body?.initiator === 'CUSTOMER' ? 'CUSTOMER' : 'AGENCY',
+    );
+  }
+
+  /** 05-D05: request a rental extension (idempotent; conflicts are 409s). */
+  @Post(':bookingId/extensions')
+  @HttpCode(201)
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_EXTEND)
+  async requestExtension(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { end?: string; reason?: string },
+    @Headers('Idempotency-Key') idempotencyKey?: string,
+  ): Promise<{ extensionId: string; status: string; requestedEndsAt: string; originalEndsAt: string }> {
+    return this.service.requestExtension(agencyId, userId, bookingId, body ?? {}, idempotencyKey);
+  }
+
+  /** 05-D06: approve an extension (guard re-check inside). */
+  @Post(':bookingId/extensions/:extensionId/approve')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async approveExtension(
+    @Param('agencyId') agencyId: string,
+    @Param('extensionId') extensionId: string,
+    @AuthUserId() userId: string,
+  ): Promise<BookingResponse> {
+    return this.service.approveExtension(agencyId, userId, extensionId);
+  }
+
+  /** 05-D06: reject an extension (audited decision). */
+  @Post(':bookingId/extensions/:extensionId/reject')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async rejectExtension(
+    @Param('agencyId') agencyId: string,
+    @Param('extensionId') extensionId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { reason?: string },
+  ): Promise<{ extensionId: string; status: string }> {
+    return this.service.rejectExtension(agencyId, userId, extensionId, body?.reason ?? '');
+  }
+
+  /** 05-D07: reassign the booking to another vehicle before the rental. */
+  @Post(':bookingId/reassign')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BOOKING_CONFIRM)
+  async reassign(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+    @AuthUserId() userId: string,
+    @Body() body: { vehicleId?: string; reason?: string },
+  ): Promise<BookingResponse> {
+    return this.service.reassignVehicle(agencyId, userId, bookingId, body ?? {});
   }
 
   @Post(':bookingId/reject')

@@ -90,6 +90,7 @@ describe('BOOKING_TRANSITIONS (05-C01…C12)', () => {
       reject: Permission.BOOKING_CONFIRM,
       expire: Permission.BOOKING_CANCEL,
       markNoShow: Permission.BOOKING_CONFIRM,
+      requestExtension: Permission.BOOKING_EXTEND,
     };
     for (const [command, permission] of Object.entries(expected)) {
       expect(bookingCommandPermission(command)).toBe(permission);

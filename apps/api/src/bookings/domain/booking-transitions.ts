@@ -17,6 +17,7 @@ import { BookingErrorCode } from './booking-rules';
 
 export const BookingCommand = {
   REQUEST_CONFIRMATION: 'requestConfirmation',
+  REQUEST_EXTENSION: 'requestExtension',
   CONFIRM: 'confirm',
   MARK_READY: 'markReady',
   CHECK_OUT: 'checkOut',
@@ -53,6 +54,9 @@ export const BOOKING_TRANSITIONS: readonly BookingTransition[] = [
   { command: 'reject', from: ['PENDING_CONFIRMATION'], to: 'REJECTED', permission: Permission.BOOKING_CONFIRM },
   { command: 'expire', from: ['HOLD'], to: 'EXPIRED', permission: Permission.BOOKING_CANCEL },
   { command: 'markNoShow', from: ['READY_FOR_PICKUP'], to: 'NO_SHOW', permission: Permission.BOOKING_CONFIRM },
+  // 05-D05: an extension keeps the booking ACTIVE; the decision is recorded
+  // on the extension row (REQUESTED→APPROVED/REJECTED), never as a state.
+  { command: 'requestExtension', from: ['ACTIVE'], to: 'ACTIVE', permission: Permission.BOOKING_EXTEND },
 ];
 
 const TRANSITION_BY_COMMAND = new Map<string, BookingTransition>(

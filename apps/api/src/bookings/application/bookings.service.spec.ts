@@ -6,6 +6,7 @@ import type { LocationContextService } from '../../availability/application/loca
 import { IntervalConflictError } from '../../availability/infrastructure/commitment-guard';
 import { BookingsService } from './bookings.service';
 import type { BookingsRepository, BookingWithHistory } from '../infrastructure/bookings.repository';
+import { ReplayedCommandError } from '../infrastructure/bookings.repository';
 import { BookingErrorCode, formatBookingNumber } from '../domain/booking-rules';
 
 /**
@@ -76,7 +77,7 @@ function makeService(options: {
 } = {}) {
   const availability = new AvailabilityService(makeAvailabilityRepository(options.availabilityRepository));
   const locationContext = {
-    resolve: jest.fn(async (_tenantId: string, input: Record<string, string | undefined>) => ({ ...input })),
+    resolve: jest.fn((_tenantId: string, input: Record<string, string | undefined>) => ({ ...input })),
   } as unknown as LocationContextService;
   const env = loadEnvSchema({
     NODE_ENV: 'test',
@@ -142,7 +143,7 @@ describe('BookingsService.validateBookingRequest (05-B03/B04)', () => {
 describe('BookingsService.createBooking (05-B03/B04)', () => {
   it('creates a vehicle booking with DRAFT history when availability passes', async () => {
     const repository = {
-      create: jest.fn(async () => bookingRow()),
+      create: jest.fn(() => bookingRow()),
     } as unknown as BookingsRepository;
     const { service } = makeService({
       repository,
@@ -164,6 +165,7 @@ describe('BookingsService.createBooking (05-B03/B04)', () => {
     });
     expect(repository.create).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'ag1', mode: 'VEHICLE', channel: 'AGENCY_WEB' }),
+      null,
     );
   });
 
@@ -219,7 +221,7 @@ describe('BookingsService.createBooking (05-B03/B04)', () => {
 
   it('creates category bookings with capacity and no vehicle assignment', async () => {
     const repository = {
-      create: jest.fn(async () =>
+      create: jest.fn(() =>
         bookingRow({ inventoryMode: 'CATEGORY', assignedVehicleId: null, requestedCategoryId: 'c1' }),
       ),
     } as unknown as BookingsRepository;
@@ -270,8 +272,8 @@ describe('BookingsService.createBooking (05-B03/B04)', () => {
 describe('BookingsService.placeBookingHold (05-B05)', () => {
   it('places the hold through the repository and returns the HOLD state', async () => {
     const repository = {
-      findInTenant: jest.fn(async () => bookingRow()),
-      placeBookingHold: jest.fn(async () =>
+      findInTenant: jest.fn(() => bookingRow()),
+      placeBookingHold: jest.fn(() =>
         bookingRow({ status: 'HOLD', statusHistory: [historyEntry('HOLD', 'booking.hold_placed:x', 'DRAFT'), historyEntry('DRAFT', 'booking.created')] }),
       ),
     } as unknown as BookingsRepository;
@@ -293,7 +295,7 @@ describe('BookingsService.placeBookingHold (05-B05)', () => {
   it('rejects holds on category bookings and non-DRAFT states', async () => {
     const categoryBooking = makeService({
       repository: {
-        findInTenant: jest.fn(async () =>
+        findInTenant: jest.fn(() =>
           bookingRow({ inventoryMode: 'CATEGORY', assignedVehicleId: null }),
         ),
       } as unknown as BookingsRepository,
@@ -304,7 +306,7 @@ describe('BookingsService.placeBookingHold (05-B05)', () => {
 
     const heldBooking = makeService({
       repository: {
-        findInTenant: jest.fn(async () => bookingRow({ status: 'HOLD' })),
+        findInTenant: jest.fn(() => bookingRow({ status: 'HOLD' })),
       } as unknown as BookingsRepository,
     });
     await expect(heldBooking.service.placeBookingHold('ag1', 'u1', 'b1')).rejects.toMatchObject({
@@ -314,8 +316,8 @@ describe('BookingsService.placeBookingHold (05-B05)', () => {
 
   it('translates guard conflicts into INTERVAL_CONFLICT (04-B)', async () => {
     const repository = {
-      findInTenant: jest.fn(async () => bookingRow()),
-      placeBookingHold: jest.fn(async () => {
+      findInTenant: jest.fn(() => bookingRow()),
+      placeBookingHold: jest.fn(() => {
         throw new IntervalConflictError('conflict');
       }),
     } as unknown as BookingsRepository;
@@ -330,8 +332,8 @@ describe('BookingsService.placeBookingHold (05-B05)', () => {
 describe('BookingsService reads (05-B07)', () => {
   it('gets and lists tenant-scoped bookings with history', async () => {
     const repository = {
-      findInTenant: jest.fn(async () => bookingRow()),
-      listForTenant: jest.fn(async () => [bookingRow()]),
+      findInTenant: jest.fn(() => bookingRow()),
+      listForTenant: jest.fn(() => [bookingRow()]),
     } as unknown as BookingsRepository;
     const { service } = makeService({ repository });
 
@@ -356,8 +358,8 @@ describe('formatBookingNumber (05-B02)', () => {
 describe('BookingsService state machine commands (05-C01…C12)', () => {
   const transitionsRepo = (status: string, options: Partial<Record<string, unknown>> = {}) => {
     const repo = {
-      findInTenant: jest.fn(async () => bookingRow({ status: status as never })),
-      applyTransition: jest.fn(async (input: { to: string; reason: string }) =>
+      findInTenant: jest.fn(() => bookingRow({ status: status as never })),
+      applyTransition: jest.fn((input: { to: string; reason: string }) =>
         bookingRow({
           status: input.to as never,
           statusHistory: [
@@ -366,12 +368,13 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
           ],
         }),
       ),
-      findActiveHold: jest.fn(async () => ({ id: 'h1', vehicleId: '11111111-1111-4111-8111-111111111111', expiresAt: new Date(Date.now() + 3600_000), status: 'ACTIVE' })),
-      updateBookingHold: jest.fn(async () => undefined),
-      conflictingCommitmentsExcludingHold: jest.fn(async () => []),
-      findQuoteInTenant: jest.fn(async () => ({ id: 'q1', vehicleId: '11111111-1111-4111-8111-111111111111', categoryId: null, expiresAt: new Date(Date.now() + 3600_000) })),
-      findQuotePricing: jest.fn(async () => ({ currency: 'DZD', totalMinor: 9000 })),
-      capturePriceSnapshot: jest.fn(async () => undefined),
+      findActiveHold: jest.fn(() => ({ id: 'h1', vehicleId: '11111111-1111-4111-8111-111111111111', expiresAt: new Date(Date.now() + 3600_000), status: 'ACTIVE' })),
+      updateBookingHold: jest.fn(() => undefined),
+      cancelWithRecord: jest.fn(() => bookingRow({ status: 'CANCELLED' })),
+      conflictingCommitmentsExcludingHold: jest.fn(() => []),
+      findQuoteInTenant: jest.fn(() => ({ id: 'q1', vehicleId: '11111111-1111-4111-8111-111111111111', categoryId: null, expiresAt: new Date(Date.now() + 3600_000) })),
+      findQuotePricing: jest.fn(() => ({ currency: 'DZD', totalMinor: 9000 })),
+      capturePriceSnapshot: jest.fn(() => undefined),
       ...options,
     } as unknown as BookingsRepository;
     return { repo, ...makeService({ repository: repo }) };
@@ -394,14 +397,14 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('rejects mismatched or expired quotes at requestConfirmation', async () => {
     const mismatched = transitionsRepo('HOLD', {
-      findQuoteInTenant: jest.fn(async () => ({ id: 'q1', vehicleId: '22222222-2222-4222-8222-222222222222', categoryId: null, expiresAt: new Date(Date.now() + 3600_000) })),
+      findQuoteInTenant: jest.fn(() => ({ id: 'q1', vehicleId: '22222222-2222-4222-8222-222222222222', categoryId: null, expiresAt: new Date(Date.now() + 3600_000) })),
     });
     await expect(
       mismatched.service.requestConfirmation('ag1', 'u1', 'b1', { quoteId: 'q1' }),
     ).rejects.toMatchObject({ response: { code: 'BOOKING_QUOTE_MISMATCH' } });
 
     const expired = transitionsRepo('HOLD', {
-      findQuoteInTenant: jest.fn(async () => ({ id: 'q1', vehicleId: '11111111-1111-4111-8111-111111111111', categoryId: null, expiresAt: new Date(Date.now() - 1000) })),
+      findQuoteInTenant: jest.fn(() => ({ id: 'q1', vehicleId: '11111111-1111-4111-8111-111111111111', categoryId: null, expiresAt: new Date(Date.now() - 1000) })),
     });
     await expect(
       expired.service.requestConfirmation('ag1', 'u1', 'b1', { quoteId: 'q1' }),
@@ -410,7 +413,7 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('confirm requires the customer, refreshes the hold and captures the snapshot (05-C03)', async () => {
     const { repo, service } = transitionsRepo('PENDING_CONFIRMATION', {
-      findInTenant: jest.fn(async () => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1', quoteId: 'q1' })),
+      findInTenant: jest.fn(() => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1', quoteId: 'q1' })),
     });
 
     const result = await service.confirmBooking('ag1', 'u1', 'b1');
@@ -433,8 +436,8 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('confirm re-checks the interval and rejects when a new conflict appeared (05-C03)', async () => {
     const { service } = transitionsRepo('PENDING_CONFIRMATION', {
-      findInTenant: jest.fn(async () => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1' })),
-      conflictingCommitmentsExcludingHold: jest.fn(async () => [{ id: 'other-hold', kind: 'HOLD' }]),
+      findInTenant: jest.fn(() => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1' })),
+      conflictingCommitmentsExcludingHold: jest.fn(() => [{ id: 'other-hold', kind: 'HOLD' }]),
     });
 
     await expect(service.confirmBooking('ag1', 'u1', 'b1')).rejects.toMatchObject({
@@ -444,8 +447,8 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('confirm rejects bookings without a live hold (05-C03)', async () => {
     const { service } = transitionsRepo('PENDING_CONFIRMATION', {
-      findInTenant: jest.fn(async () => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1' })),
-      findActiveHold: jest.fn(async () => null),
+      findInTenant: jest.fn(() => bookingRow({ status: 'PENDING_CONFIRMATION', customerId: 'user-1' })),
+      findActiveHold: jest.fn(() => null),
     });
     await expect(service.confirmBooking('ag1', 'u1', 'b1')).rejects.toMatchObject({
       response: { code: 'BOOKING_HOLD_NOT_ACTIVE' },
@@ -454,7 +457,7 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('markReady requires an assigned vehicle (05-C05)', async () => {
     const unassigned = transitionsRepo('CONFIRMED', {
-      findInTenant: jest.fn(async () => bookingRow({ status: 'CONFIRMED', assignedVehicleId: null, inventoryMode: 'CATEGORY' })),
+      findInTenant: jest.fn(() => bookingRow({ status: 'CONFIRMED', assignedVehicleId: null, inventoryMode: 'CATEGORY' })),
     });
     await expect(unassigned.service.markReady('ag1', 'u1', 'b1')).rejects.toMatchObject({
       response: { code: 'BOOKING_ASSIGNMENT_REQUIRED' },
@@ -510,8 +513,8 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
     expect(repo.updateBookingHold).toHaveBeenCalledWith(
       expect.objectContaining({ holdId: 'h1', status: 'RELEASED' }),
     );
-    expect(repo.applyTransition).toHaveBeenCalledWith(
-      expect.objectContaining({ from: 'HOLD', to: 'CANCELLED', reason: 'booking.cancelled:customer asked' }),
+    expect(repo.cancelWithRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ from: 'HOLD', reason: 'customer asked', initiator: 'AGENCY' }),
     );
   });
 
@@ -522,7 +525,7 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
     });
 
     const { repo, service } = transitionsRepo('HOLD', {
-      findActiveHold: jest.fn(async () => ({ id: 'h1', vehicleId: '11111111-1111-4111-8111-111111111111', expiresAt: new Date(Date.now() - 1000), status: 'ACTIVE' })),
+      findActiveHold: jest.fn(() => ({ id: 'h1', vehicleId: '11111111-1111-4111-8111-111111111111', expiresAt: new Date(Date.now() - 1000), status: 'ACTIVE' })),
     });
     const result = await service.expireBooking('ag1', 'u1', 'b1');
     expect(result.status).toBe('EXPIRED');
@@ -531,8 +534,16 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
     );
   });
 
-  it('marks no-shows from READY_FOR_PICKUP with a reason (05-C11)', async () => {
-    const { service } = transitionsRepo('READY_FOR_PICKUP');
+  it('marks no-shows from READY_FOR_PICKUP once pickup has passed (05-C11/D04)', async () => {
+    const { service } = transitionsRepo('READY_FOR_PICKUP', {
+      findInTenant: jest.fn(() =>
+        bookingRow({
+          status: 'READY_FOR_PICKUP',
+          startsAt: new Date(Date.now() - 3600_000),
+          endsAt: new Date(Date.now() + 3600_000),
+        }),
+      ),
+    });
     const result = await service.markNoShow('ag1', 'u1', 'b1', 'did not arrive');
     expect(result.status).toBe('NO_SHOW');
   });
@@ -542,5 +553,228 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
     await expect(service.cancelBooking('ag1', 'u1', 'b1', 'nope')).rejects.toMatchObject({
       response: { code: 'BOOKING_INVALID_TRANSITION' },
     });
+  });
+});
+
+describe('BookingsService lifecycle operations (05-D01…D10)', () => {
+  const availableVehicle = (vehicleId: string) => ({
+    id: vehicleId,
+    status: 'AVAILABLE',
+    currentBranchId: null,
+  });
+
+  const lifecycleRepo = (
+    status: string,
+    options: Partial<Record<string, unknown>> = {},
+    availabilityRepository: Partial<AvailabilityRepository> = {
+      findVehicleInTenant: jest.fn().mockResolvedValue(availableVehicle('33333333-3333-4333-8333-333333333333')),
+    },
+  ) => {
+    const repo = {
+      findInTenant: jest.fn(() => bookingRow({ status: status as never })),
+      findActiveHold: jest.fn(() => ({ id: 'h1', vehicleId: '11111111-1111-4111-8111-111111111111', expiresAt: new Date(Date.now() + 3600_000), status: 'ACTIVE' })),
+      cancelWithRecord: jest.fn(() => bookingRow({ status: 'CANCELLED' })),
+      createExtension: jest.fn((input: { requestedEndsAt: Date; originalEndsAt: Date }) => ({
+        id: 'e1',
+        status: 'REQUESTED',
+        requestedEndsAt: input.requestedEndsAt,
+        originalEndsAt: input.originalEndsAt,
+      })),
+      findExtensionInTenant: jest.fn((tenantId: string) => (tenantId === 'ag1' ? {
+        id: 'e1',
+        bookingId: 'b1',
+        status: 'REQUESTED',
+        originalEndsAt: new Date('2026-09-10T18:00:00Z'),
+        requestedEndsAt: new Date('2026-09-11T18:00:00Z'),
+        bookingEndsAt: new Date('2026-09-10T18:00:00Z'),
+        bookingStatus: 'ACTIVE',
+        inventoryMode: 'VEHICLE',
+        assignedVehicleId: '11111111-1111-4111-8111-111111111111',
+        requestedCategoryId: null,
+      } : null)),
+      findLatestExtension: jest.fn(() => ({
+        id: 'e1',
+        status: 'REQUESTED',
+        requestedEndsAt: new Date('2026-09-11T18:00:00Z'),
+        originalEndsAt: new Date('2026-09-10T18:00:00Z'),
+      })),
+      conflictingCommitmentsExcludingHold: jest.fn(() => []),
+      approveExtension: jest.fn(() => undefined),
+      rejectExtension: jest.fn(() => undefined),
+      reassignVehicle: jest.fn(() => bookingRow({ status: status as never })),
+      sweepExpiredHolds: jest.fn(() => 2),
+      findIdempotencyRecord: jest.fn(() => null),
+      applyTransition: jest.fn((input: { to: string }) => bookingRow({ status: input.to as never })),
+      placeBookingHold: jest.fn(() => bookingRow({ status: 'HOLD' })),
+      create: jest.fn(() => bookingRow({ status: 'DRAFT' })),
+      findQuoteInTenant: jest.fn(() => null),
+      findQuotePricing: jest.fn(() => null),
+      capturePriceSnapshot: jest.fn(() => undefined),
+      updateBookingHold: jest.fn(() => undefined),
+      ...options,
+    } as unknown as BookingsRepository;
+    return { repo, ...makeService({ repository: repo, availabilityRepository }) };
+  };
+
+  it('cancellation records the initiator and reason (05-D01/D02)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD');
+    const result = await service.cancelBooking('ag1', 'u1', 'b1', 'changed mind', 'CUSTOMER');
+    expect(result.status).toBe('CANCELLED');
+    expect(repo.cancelWithRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: 'b1', from: 'HOLD', reason: 'changed mind', initiator: 'CUSTOMER' }),
+    );
+  });
+
+  it('no-show requires the pickup instant to have passed (05-D04)', async () => {
+    const before = lifecycleRepo('READY_FOR_PICKUP', {
+      findInTenant: jest.fn(() =>
+        bookingRow({
+          status: 'READY_FOR_PICKUP',
+          startsAt: new Date(Date.now() + 3600_000),
+          endsAt: new Date(Date.now() + 7200_000),
+        }),
+      ),
+    });
+    await expect(
+      before.service.markNoShow('ag1', 'u1', 'b1', 'did not arrive'),
+    ).rejects.toMatchObject({ response: { code: 'BOOKING_INVALID_TRANSITION' } });
+
+    const after = lifecycleRepo('READY_FOR_PICKUP', {
+      findInTenant: jest.fn(() =>
+        bookingRow({
+          status: 'READY_FOR_PICKUP',
+          startsAt: new Date(Date.now() - 3600_000),
+          endsAt: new Date(Date.now() + 3600_000),
+        }),
+      ),
+    });
+    const result = await after.service.markNoShow('ag1', 'u1', 'b1', 'did not arrive');
+    expect(result.status).toBe('NO_SHOW');
+  });
+
+  it('requests extensions with an availability re-check and idempotency (05-D05/D06/D09)', async () => {
+    const booking = bookingRow({
+      status: 'ACTIVE',
+      startsAt: new Date('2026-09-10T08:00:00Z'),
+      endsAt: new Date('2026-09-10T18:00:00Z'),
+    });
+    const { repo, service } = lifecycleRepo('ACTIVE', { findInTenant: jest.fn(() => booking) });
+
+    const result = await service.requestExtension('ag1', 'u1', 'b1', {
+      end: '2026-09-11T18:00:00Z',
+      reason: 'keep the car',
+    }, 'key-1');
+    expect(result).toMatchObject({ extensionId: 'e1', status: 'REQUESTED' });
+    expect(repo.createExtension).toHaveBeenCalledWith(
+      expect.objectContaining({ originalEndsAt: booking.endsAt }),
+      expect.objectContaining({ command: 'booking.extend', idempotencyKey: 'key-1' }),
+    );
+
+    // Invalid end and conflicts are stable 409s.
+    const invalid = lifecycleRepo('ACTIVE', { findInTenant: jest.fn(() => booking) });
+    await expect(
+      invalid.service.requestExtension('ag1', 'u1', 'b1', { end: '2026-09-10T10:00:00Z' }),
+    ).rejects.toMatchObject({ response: { code: 'BOOKING_EXTENSION_END_INVALID' } });
+
+    const conflicting = lifecycleRepo('ACTIVE', {
+      findInTenant: jest.fn(() => booking),
+      conflictingCommitmentsExcludingHold: jest.fn(() => [{ id: 'x', kind: 'HOLD' }]),
+    });
+    await expect(
+      conflicting.service.requestExtension('ag1', 'u1', 'b1', { end: '2026-09-11T18:00:00Z' }),
+    ).rejects.toMatchObject({ response: { code: 'INTERVAL_CONFLICT' } });
+  });
+
+  it('approves and rejects extensions with state checks (05-D06)', async () => {
+    const { repo, service } = lifecycleRepo('ACTIVE');
+    await service.approveExtension('ag1', 'u1', 'e1');
+    expect(repo.approveExtension).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: 'b1', extensionId: 'e1', newEndsAt: expect.any(Date) }),
+    );
+
+    const decided = lifecycleRepo('ACTIVE', {
+      findExtensionInTenant: jest.fn(() => ({
+        id: 'e1',
+        bookingId: 'b1',
+        status: 'APPROVED',
+        originalEndsAt: new Date('2026-09-10T18:00:00Z'),
+        requestedEndsAt: new Date('2026-09-11T18:00:00Z'),
+        bookingEndsAt: new Date('2026-09-10T18:00:00Z'),
+        bookingStatus: 'ACTIVE',
+        inventoryMode: 'VEHICLE',
+        assignedVehicleId: '11111111-1111-4111-8111-111111111111',
+        requestedCategoryId: null,
+      })),
+    });
+    await expect(decided.service.approveExtension('ag1', 'u1', 'e1')).rejects.toMatchObject({
+      response: { code: 'BOOKING_EXTENSION_NOT_PENDING' },
+    });
+
+    const noReason = lifecycleRepo('ACTIVE');
+    await expect(noReason.service.rejectExtension('ag1', 'u1', 'e1', '')).rejects.toMatchObject({
+      response: { code: 'BOOKING_REASON_REQUIRED' },
+    });
+    const { repo: rejectRepo, service: rejectService } = lifecycleRepo('ACTIVE');
+    const rejected = await rejectService.rejectExtension('ag1', 'u1', 'e1', 'fleet needs it');
+    expect(rejected).toEqual({ extensionId: 'e1', status: 'REJECTED' });
+    expect(rejectRepo.rejectExtension).toHaveBeenCalledWith(
+      expect.objectContaining({ extensionId: 'e1', reason: 'fleet needs it' }),
+    );
+  });
+
+  it('reassigns vehicles before the rental with the hold move (05-D07)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD');
+    const result = await service.reassignVehicle('ag1', 'u1', 'b1', {
+      vehicleId: '33333333-3333-4333-8333-333333333333',
+      reason: 'swap',
+    });
+    expect(result.status).toBe('HOLD');
+    expect(repo.reassignVehicle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'ag1',
+        bookingId: 'b1',
+        fromVehicleId: '11111111-1111-4111-8111-111111111111',
+        toVehicleId: '33333333-3333-4333-8333-333333333333',
+        fromStatus: 'HOLD',
+      }),
+    );
+
+    const sameVehicle = lifecycleRepo('HOLD');
+    await expect(
+      sameVehicle.service.reassignVehicle('ag1', 'u1', 'b1', {
+        vehicleId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'BOOKING_INVALID_TRANSITION' } });
+  });
+
+  it('sweeps expired holds (05-D03)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD');
+    const result = await service.expireStaleHoldSweep('ag1', 'u1');
+    expect(result).toEqual({ expired: 2 });
+    expect(repo.sweepExpiredHolds).toHaveBeenCalledWith('ag1');
+  });
+
+  it('replays idempotent commands with the original result (05-D09)', async () => {
+    const replayed = new ReplayedCommandError('b1');
+    const { service } = lifecycleRepo(
+      'HOLD',
+      {
+        create: jest.fn(() => {
+          throw replayed;
+        }),
+        findIdempotencyRecord: jest.fn(() => ({ bookingId: 'b1' })),
+      },
+      {
+        findVehicleInTenant: jest.fn().mockResolvedValue(availableVehicle('11111111-1111-4111-8111-111111111111')),
+      },
+    );
+
+    const result = await service.createBooking(
+      'ag1',
+      'u1',
+      vehicleRequest(),
+      'same-key',
+    );
+    expect(result.bookingId).toBe('b1');
   });
 });
