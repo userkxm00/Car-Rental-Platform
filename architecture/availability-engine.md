@@ -132,6 +132,35 @@ The scheduler should allow:
 - maintenance visibility
 - drag/drop only when the resulting domain operation is validated server-side
 
+### Timeline feed (04-D01…D05)
+
+The calendar UI (rendered in phase 12-B: 12-B01 operations calendar,
+12-B02 vehicle timeline, 12-B03 branch calendar) is backed by one timeline
+feed, implemented in 04-D:
+
+`GET /api/v1/agencies/:agencyId/availability/timeline?start&end[&vehicleId][&branchId]`
+(agency staff, tenant scope + `vehicle.read`).
+
+- `start`/`end` are UTC instants with an explicit offset (same interval
+  boundary as every availability read — 04-A05); the response echoes the
+  normalized window.
+- The feed returns every **active** vehicle of the agency (optionally
+  filtered by `vehicleId` / `branchId`), including vehicles with no
+  commitments in the window — each lane renders even when empty.
+- Every commitment intersecting the window is returned per vehicle: blocks
+  (SCHEDULED/ACTIVE/CANCELLED/COMPLETED) and holds (incl. expired) with
+  kind, type, status, reason and instant bounds. Past/terminal rows stay
+  visible so history remains explainable.
+- Each commitment carries `conflicting` (04-D03), computed from the shared
+  half-open overlap contract: a **live** block (SCHEDULED/ACTIVE) and a
+  **live** hold (ACTIVE, unexpired) that overlap are flagged on both
+  sides. Block×block and hold×hold overlaps are not flagged — the only
+  cross-type pair the commitment guard protects (04-B). The flag is a
+  visualization signal; enforcement remains the write-path guard.
+- Day/week/month views are presentation concerns of the phase 12-B UI
+  built on this feed; the feed itself is window-driven, so any view is a
+  matter of choosing the window.
+
 ## Atomicity
 
 Availability validation and the write operation that consumes inventory must be designed as one protected business operation for concurrency-sensitive paths.
@@ -141,6 +170,28 @@ A successful availability read alone must never guarantee future reservation.
 ## Caching
 
 Availability results may be cached for performance only when safe. Cached data must never be the final authority for confirming a booking.
+
+### 04-D06 boundary (as implemented in phase 04)
+
+Phase 04 ships **no availability cache**: every read (single vehicle, list,
+capacity, timeline) is computed from the database at request time, and the
+exclusion constraints are the single point of invalidation — any write that
+would change availability is rejected atomically at the constraint, so a
+stale cache cannot be the source of a double booking.
+
+If a cache is introduced later (via the repository change/ADR process), it
+must satisfy all of:
+
+- **Reads** may hit the cache; **confirmation never does**. Confirmation
+  re-checks under the commitment guard (04-B) inside its transaction.
+- Keys are **tenant-scoped and interval-aware**, never global.
+- Invalidation is **event-driven and durable** (outbox → Redis
+  DEL/invalidations on block/hold/booking writes), not TTL-based guessing;
+  a TTL is only a fallback.
+- Redis remains cache/jobs only — never the source of truth for
+  availability, per the provider boundaries.
+- The cache must be optional: with Redis absent, reads fall back to direct
+  computation.
 
 ## Future event-driven support
 

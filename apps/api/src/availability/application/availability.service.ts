@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AvailabilityErrorCode } from '../domain/interval';
+import { AvailabilityErrorCode, overlaps } from '../domain/interval';
 import { parseUtcInstant } from '../domain/timezone-boundary';
 import type {
   AvailabilityContext,
@@ -135,6 +135,94 @@ export class AvailabilityService {
       eligible,
       committed,
       available: Math.max(0, eligible - committed),
+    };
+  }
+
+  /**
+   * 04-D01…D05: scheduler timeline — vehicles (filtered by vehicle/branch)
+   * with every commitment intersecting the window, plus a conflict flag
+   * computed from the shared half-open overlap contract (04-D03). Live
+   * commitments are blocks in SCHEDULED/ACTIVE and holds ACTIVE with an
+   * unexpired hold; past/terminal rows remain visible for the timeline.
+   */
+  async scheduleTimeline(
+    tenantId: string,
+    interval: { start: Date; end: Date },
+    filters: { vehicleId?: string; branchId?: string },
+  ): Promise<{
+    start: string;
+    end: string;
+    vehicles: Array<{
+      vehicleId: string;
+      make: string;
+      model: string;
+      plateNumber: string;
+      currentBranchId: string | null;
+      commitments: Array<{
+        id: string;
+        kind: 'BLOCK' | 'HOLD';
+        blockType: string | null;
+        status: string;
+        start: string;
+        end: string;
+        reason: string | null;
+        conflicting: boolean;
+      }>;
+    }>;
+  }> {
+    const now = new Date();
+    const rows = await this.repository.scheduleCommitments(tenantId, interval, filters);
+
+    return {
+      start: interval.start.toISOString(),
+      end: interval.end.toISOString(),
+      vehicles: rows.map((vehicle) => {
+        const live = vehicle.commitments.map((c) => ({
+          c,
+          live:
+            (c.kind === 'BLOCK' && (c.status === 'SCHEDULED' || c.status === 'ACTIVE')) ||
+            (c.kind === 'HOLD' && c.status === 'ACTIVE' && c.end.getTime() > now.getTime()),
+        }));
+        return {
+          vehicleId: vehicle.vehicleId,
+          make: vehicle.make,
+          model: vehicle.model,
+          plateNumber: vehicle.plateNumber,
+          currentBranchId: vehicle.currentBranchId,
+          commitments: vehicle.commitments.map((c) => {
+            const conflicting =
+              c.kind === 'BLOCK'
+                ? live.some(
+                    (o) =>
+                      o.live &&
+                      o.c.kind === 'HOLD' &&
+                      overlaps(
+                        { start: c.start, end: c.end },
+                        { start: o.c.start, end: o.c.end },
+                      ),
+                  )
+                : live.some(
+                    (o) =>
+                      o.live &&
+                      o.c.kind === 'BLOCK' &&
+                      overlaps(
+                        { start: c.start, end: c.end },
+                        { start: o.c.start, end: o.c.end },
+                      ),
+                  );
+            return {
+              id: c.id,
+              kind: c.kind,
+              blockType: c.blockType,
+              status: c.status,
+              start: c.start.toISOString(),
+              end: c.end.toISOString(),
+              reason: c.reason,
+              conflicting,
+            };
+          }),
+        };
+      }),
     };
   }
 

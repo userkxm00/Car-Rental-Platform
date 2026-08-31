@@ -203,3 +203,195 @@ describe('AvailabilityService.validateRequestInterval (04-A05 boundary)', () => 
     ).toThrow(ConflictException);
   });
 });
+
+describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
+  it('serializes the window and groups commitments per vehicle', async () => {
+    const repo = makeRepository({
+      scheduleCommitments: jest.fn().mockResolvedValue([
+        {
+          vehicleId: 'v1',
+          make: 'Toyota',
+          model: 'Corolla',
+          plateNumber: '111-222-16',
+          currentBranchId: 'branch-a',
+          commitments: [
+            {
+              id: 'b1',
+              kind: 'BLOCK',
+              blockType: 'MAINTENANCE',
+              status: 'SCHEDULED',
+              start: new Date('2026-09-01T08:00:00Z'),
+              end: new Date('2026-09-01T10:00:00Z'),
+              reason: 'oil change',
+            },
+          ],
+        },
+      ]),
+    });
+    const service = new AvailabilityService(repo);
+
+    const result = await service.scheduleTimeline('ag1', interval, {});
+
+    expect(result.start).toBe('2026-09-01T08:00:00.000Z');
+    expect(result.end).toBe('2026-09-01T18:00:00.000Z');
+    expect(result.vehicles).toHaveLength(1);
+    expect(result.vehicles[0]).toMatchObject({
+      vehicleId: 'v1',
+      make: 'Toyota',
+      model: 'Corolla',
+      plateNumber: '111-222-16',
+      currentBranchId: 'branch-a',
+    });
+    expect(result.vehicles[0].commitments[0]).toMatchObject({
+      id: 'b1',
+      kind: 'BLOCK',
+      blockType: 'MAINTENANCE',
+      status: 'SCHEDULED',
+      start: '2026-09-01T08:00:00.000Z',
+      end: '2026-09-01T10:00:00.000Z',
+      reason: 'oil change',
+      conflicting: false,
+    });
+  });
+
+  it('flags a live block and a live hold that overlap as conflicting on both sides (04-D03)', async () => {
+    const repo = makeRepository({
+      scheduleCommitments: jest.fn().mockResolvedValue([
+        {
+          vehicleId: 'v1',
+          make: 'Toyota',
+          model: 'Corolla',
+          plateNumber: '111-222-16',
+          currentBranchId: null,
+          commitments: [
+            {
+              id: 'b1',
+              kind: 'BLOCK',
+              blockType: 'MANUAL',
+              status: 'ACTIVE',
+              start: new Date('2026-09-01T08:00:00Z'),
+              end: new Date('2026-09-01T12:00:00Z'),
+              reason: null,
+            },
+            {
+              id: 'h1',
+              kind: 'HOLD',
+              blockType: null,
+              status: 'ACTIVE',
+              start: new Date('2026-09-01T10:00:00Z'),
+              end: new Date('2026-09-01T14:00:00Z'),
+              reason: null,
+            },
+          ],
+        },
+      ]),
+    });
+    const service = new AvailabilityService(repo);
+
+    const result = await service.scheduleTimeline('ag1', interval, {});
+
+    const [block, hold] = result.vehicles[0].commitments;
+    expect(block.conflicting).toBe(true);
+    expect(hold.conflicting).toBe(true);
+  });
+
+  it('does not flag conflicts against expired holds or cancelled blocks', async () => {
+    const past = new Date(Date.now() - 60_000);
+    const repo = makeRepository({
+      scheduleCommitments: jest.fn().mockResolvedValue([
+        {
+          vehicleId: 'v1',
+          make: 'Toyota',
+          model: 'Corolla',
+          plateNumber: '111-222-16',
+          currentBranchId: null,
+          commitments: [
+            {
+              id: 'b1',
+              kind: 'BLOCK',
+              blockType: 'MANUAL',
+              status: 'ACTIVE',
+              start: new Date('2026-09-01T08:00:00Z'),
+              end: new Date('2026-09-01T12:00:00Z'),
+              reason: null,
+            },
+            {
+              id: 'h1',
+              kind: 'HOLD',
+              blockType: null,
+              status: 'ACTIVE',
+              start: new Date('2026-09-01T10:00:00Z'),
+              end: past,
+              reason: null,
+            },
+            {
+              id: 'b2',
+              kind: 'BLOCK',
+              blockType: 'MAINTENANCE',
+              status: 'CANCELLED',
+              start: new Date('2026-09-01T08:00:00Z'),
+              end: new Date('2026-09-01T13:00:00Z'),
+              reason: null,
+            },
+          ],
+        },
+      ]),
+    });
+    const service = new AvailabilityService(repo);
+
+    const result = await service.scheduleTimeline('ag1', interval, {});
+
+    expect(result.vehicles[0].commitments.map((c) => c.conflicting)).toEqual([false, false, false]);
+  });
+
+  it('does not flag block-block overlaps (only the guard-protected BLOCK x HOLD pair conflicts)', async () => {
+    const repo = makeRepository({
+      scheduleCommitments: jest.fn().mockResolvedValue([
+        {
+          vehicleId: 'v1',
+          make: 'Toyota',
+          model: 'Corolla',
+          plateNumber: '111-222-16',
+          currentBranchId: null,
+          commitments: [
+            {
+              id: 'b1',
+              kind: 'BLOCK',
+              blockType: 'MAINTENANCE',
+              status: 'SCHEDULED',
+              start: new Date('2026-09-01T08:00:00Z'),
+              end: new Date('2026-09-01T12:00:00Z'),
+              reason: null,
+            },
+            {
+              id: 'b2',
+              kind: 'BLOCK',
+              blockType: 'MANUAL',
+              status: 'SCHEDULED',
+              start: new Date('2026-09-01T10:00:00Z'),
+              end: new Date('2026-09-01T14:00:00Z'),
+              reason: null,
+            },
+          ],
+        },
+      ]),
+    });
+    const service = new AvailabilityService(repo);
+
+    const result = await service.scheduleTimeline('ag1', interval, {});
+
+    expect(result.vehicles[0].commitments.map((c) => c.conflicting)).toEqual([false, false]);
+  });
+
+  it('forwards the vehicle and branch filters to the repository (04-D04/D05)', async () => {
+    const scheduleCommitments = jest.fn().mockResolvedValue([]);
+    const service = new AvailabilityService(makeRepository({ scheduleCommitments }));
+
+    await service.scheduleTimeline('ag1', interval, { vehicleId: 'v1', branchId: 'branch-a' });
+
+    expect(scheduleCommitments).toHaveBeenCalledWith('ag1', interval, {
+      vehicleId: 'v1',
+      branchId: 'branch-a',
+    });
+  });
+});

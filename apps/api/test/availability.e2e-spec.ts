@@ -14,10 +14,10 @@ import { api } from './http';
 import { JwksTestServer, startJwksTestServer } from './helpers/jwks-test-server';
 
 /**
- * Availability API integration tests (04-C07/08): the computed availability
- * answer over real HTTP + real PostgreSQL — blocks, holds (incl. expiry),
- * branch constraints, capacity math, boundary validation, authorization and
- * tenant isolation.
+ * Availability API integration tests (04-C07/08, 04-D01…D05): the computed
+ * availability answer over real HTTP + real PostgreSQL — blocks, holds
+ * (incl. expiry), branch constraints, capacity math, boundary validation,
+ * authorization and tenant isolation, plus the scheduler timeline feed.
  */
 
 const LOCAL_TEST_DATABASE_URL =
@@ -41,6 +41,28 @@ interface CapacityBody {
   eligible: number;
   committed: number;
   available: number;
+}
+
+interface TimelineBody {
+  start: string;
+  end: string;
+  vehicles: Array<{
+    vehicleId: string;
+    make: string;
+    model: string;
+    plateNumber: string;
+    currentBranchId: string | null;
+    commitments: Array<{
+      id: string;
+      kind: 'BLOCK' | 'HOLD';
+      blockType: string | null;
+      status: string;
+      start: string;
+      end: string;
+      reason: string | null;
+      conflicting: boolean;
+    }>;
+  }>;
 }
 
 describe('Availability API (integration)', () => {
@@ -383,5 +405,119 @@ describe('Availability API (integration)', () => {
     expect((zoneRes.body as ApiErrorBody).error.code).toBe('DELIVERY_ZONE_NOT_FOUND');
 
     await prisma.tenant.delete({ where: { id: otherTenant.id } });
+  });
+
+  it('timeline: returns window commitments and flags BLOCK x HOLD conflicts (04-D01/D03)', async () => {
+    const auth = await agencyToken('avq-owner');
+    const categoryId = await createCategory('BASE');
+    const vehicleId = await createVehicle(categoryId);
+
+    const block = await prisma.vehicleBlock.create({
+      data: {
+        tenantId: agencyId,
+        vehicleId,
+        blockType: 'MAINTENANCE',
+        startsAt: new Date('2026-09-10T06:00:00Z'),
+        endsAt: new Date('2026-09-10T12:00:00Z'),
+        reason: 'scheduled service',
+      },
+    });
+    const hold = await prisma.bookingHold.create({
+      data: {
+        tenantId: agencyId,
+        vehicleId,
+        startsAt: new Date('2026-09-10T10:00:00Z'),
+        endsAt: new Date('2026-09-10T14:00:00Z'),
+        expiresAt: new Date('2026-09-11T00:00:00Z'), // live
+        channel: 'MARKETPLACE',
+      },
+    });
+
+    const res = await api(app)
+      .get(`/api/v1/agencies/${agencyId}/availability/timeline?start=${START}&end=${END}`)
+      .set('Authorization', `Bearer ${auth}`)
+      .expect(200);
+
+    const body = res.body as TimelineBody;
+    expect(body.start).toBe(new Date(START).toISOString());
+    expect(body.end).toBe(new Date(END).toISOString());
+    expect(body.vehicles).toHaveLength(1);
+    expect(body.vehicles[0]).toMatchObject({ vehicleId, make: 'Dacia', model: 'Logan' });
+
+    const commitments = body.vehicles[0].commitments;
+    expect(commitments).toHaveLength(2);
+    const blockCommitment = commitments.find((c) => c.id === block.id);
+    const holdCommitment = commitments.find((c) => c.id === hold.id);
+    expect(blockCommitment).toMatchObject({
+      kind: 'BLOCK',
+      blockType: 'MAINTENANCE',
+      status: 'SCHEDULED',
+      reason: 'scheduled service',
+      conflicting: true,
+    });
+    expect(holdCommitment).toMatchObject({ kind: 'HOLD', blockType: null, conflicting: true });
+  });
+
+  it('timeline: filters by vehicle and branch (04-D04/D05)', async () => {
+    const auth = await agencyToken('avq-owner');
+    const categoryId = await createCategory('BASE');
+    const v1 = await createVehicle(categoryId, 'Dacia', 'PLATE-A');
+    const v2 = await createVehicle(categoryId, 'Hyundai', 'PLATE-B');
+
+    const branchB = await prisma.branch.create({
+      data: {
+        tenantId: agencyId,
+        name: 'Branch B',
+        code: 'BR-B',
+        locationId: (
+          await prisma.location.create({
+            data: { tenantId: agencyId, name: 'Loc B', type: 'BRANCH' },
+          })
+        ).id,
+      },
+    });
+    await prisma.vehicle.update({ where: { id: v2 }, data: { currentBranchId: branchB.id } });
+    await prisma.vehicleBlock.create({
+      data: {
+        tenantId: agencyId,
+        vehicleId: v1,
+        blockType: 'DAMAGE',
+        startsAt: new Date('2026-09-10T00:00:00Z'),
+        endsAt: new Date('2026-09-11T00:00:00Z'),
+      },
+    });
+
+    const byVehicle = await api(app)
+      .get(`/api/v1/agencies/${agencyId}/availability/timeline?start=${START}&end=${END}&vehicleId=${v1}`)
+      .set('Authorization', `Bearer ${auth}`)
+      .expect(200);
+    const byVehicleBody = byVehicle.body as TimelineBody;
+    expect(byVehicleBody.vehicles).toHaveLength(1);
+    expect(byVehicleBody.vehicles[0].vehicleId).toBe(v1);
+    expect(byVehicleBody.vehicles[0].commitments).toHaveLength(1);
+
+    const byBranch = await api(app)
+      .get(`/api/v1/agencies/${agencyId}/availability/timeline?start=${START}&end=${END}&branchId=${branchB.id}`)
+      .set('Authorization', `Bearer ${auth}`)
+      .expect(200);
+    const byBranchBody = byBranch.body as TimelineBody;
+    expect(byBranchBody.vehicles).toHaveLength(1);
+    expect(byBranchBody.vehicles[0].vehicleId).toBe(v2);
+    expect(byBranchBody.vehicles[0].commitments).toEqual([]);
+  });
+
+  it('timeline: requires authentication and rejects invalid intervals', async () => {
+    const auth = await agencyToken('avq-owner');
+    const base = `/api/v1/agencies/${agencyId}/availability/timeline`;
+
+    await api(app).get(`${base}?start=${START}&end=${END}`).expect(401);
+
+    for (const query of ['', `?start=${END}&end=${START}`, `?start=2026-09-10T08:00:00&end=${END}`]) {
+      const res = await api(app)
+        .get(`${base}${query}`)
+        .set('Authorization', `Bearer ${auth}`)
+        .expect(409);
+      expect((res.body as ApiErrorBody).error.code).toBe('INVALID_INTERVAL');
+    }
   });
 });

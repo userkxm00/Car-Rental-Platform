@@ -20,6 +20,10 @@ import { AvailabilityService } from '../application/availability.service';
  *   available/reasons answer for one vehicle.
  * - GET  /agencies/:agencyId/availability/categories/:categoryId — capacity
  *   (eligible / committed / available).
+ * - GET  /agencies/:agencyId/availability/timeline — scheduler feed (04-D):
+ *   vehicles with all commitments intersecting the window (vehicleId /
+ *   branchId filters), each flagged `conflicting` from the shared overlap
+ *   contract.
  *
  * Interval params: `start`/`end` as ISO-8601 instants with an explicit
  * offset (or Z). Zone-less naive datetimes are rejected (04-A05).
@@ -84,6 +88,26 @@ export class AvailabilityController {
     const interval = this.service.validateRequestInterval(start, end);
     const context = await this.resolveContext(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
     return this.service.categoryCapacity(agencyId, categoryId, interval, context);
+  }
+
+  /**
+   * 04-D01…D05: scheduler timeline for the agency. Returns the vehicles
+   * matching the optional vehicleId/branchId filters with every commitment
+   * intersecting the window; conflicts are computed from the shared overlap
+   * contract (04-D03).
+   */
+  @Get('timeline')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.VEHICLE_READ)
+  async timeline(
+    @Param('agencyId') agencyId: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('branchId') branchId?: string,
+  ): Promise<unknown> {
+    const interval = this.service.validateRequestInterval(start, end);
+    return this.service.scheduleTimeline(agencyId, interval, { vehicleId, branchId });
   }
 
   /**

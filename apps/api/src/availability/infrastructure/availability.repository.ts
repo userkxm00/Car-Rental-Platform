@@ -174,4 +174,167 @@ export class AvailabilityRepository {
         )`;
     return Number(rows[0]?.count ?? 0);
   }
+
+  /**
+   * 04-D01: vehicles of the tenant (optionally one vehicle / one branch)
+   * with their commitments intersecting the schedule window. Blocks and
+   * holds are returned side by side; overlap conflicts are computed by the
+   * service from the shared half-open contract.
+   */
+  async scheduleCommitments(
+    tenantId: string,
+    interval: AvailabilityInterval,
+    filters: { vehicleId?: string; branchId?: string },
+  ): Promise<
+    Array<{
+      vehicleId: string;
+      make: string;
+      model: string;
+      plateNumber: string;
+      currentBranchId: string | null;
+      commitments: Array<{
+        id: string;
+        kind: 'BLOCK' | 'HOLD';
+        blockType: string | null;
+        status: string;
+        start: Date;
+        end: Date;
+        reason: string | null;
+      }>;
+    }>
+  > {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        vehicleId: string;
+        make: string;
+        model: string;
+        plateNumber: string;
+        currentBranchId: string | null;
+        kind: 'BLOCK' | 'HOLD' | null;
+        id: string | null;
+        blockType: string | null;
+        status: string | null;
+        start: Date | null;
+        end: Date | null;
+        reason: string | null;
+      }>
+    >`
+      SELECT
+        v."id" AS "vehicleId",
+        v."make" AS "make",
+        v."model" AS "model",
+        v."plateNumber" AS "plateNumber",
+        v."currentBranchId" AS "currentBranchId",
+        'BLOCK' AS "kind",
+        b."id" AS "id",
+        b."blockType"::text AS "blockType",
+        b."status"::text AS "status",
+        b."startsAt" AS "start",
+        b."endsAt" AS "end",
+        b."reason" AS "reason"
+      FROM "vehicles" v
+      JOIN "vehicle_blocks" b ON b."vehicleId" = v."id"
+      WHERE v."tenantId" = ${tenantId}::uuid
+        AND (${filters.vehicleId ?? null}::uuid IS NULL OR v."id" = ${filters.vehicleId ?? null}::uuid)
+        AND (${filters.branchId ?? null}::uuid IS NULL OR v."currentBranchId" = ${filters.branchId ?? null}::uuid)
+        AND b."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')
+      UNION ALL
+      SELECT
+        v."id" AS "vehicleId",
+        v."make" AS "make",
+        v."model" AS "model",
+        v."plateNumber" AS "plateNumber",
+        v."currentBranchId" AS "currentBranchId",
+        'HOLD' AS "kind",
+        h."id" AS "id",
+        NULL AS "blockType",
+        h."status"::text AS "status",
+        h."startsAt" AS "start",
+        h."endsAt" AS "end",
+        NULL AS "reason"
+      FROM "vehicles" v
+      JOIN "booking_holds" h ON h."vehicleId" = v."id"
+      WHERE v."tenantId" = ${tenantId}::uuid
+        AND (${filters.vehicleId ?? null}::uuid IS NULL OR v."id" = ${filters.vehicleId ?? null}::uuid)
+        AND (${filters.branchId ?? null}::uuid IS NULL OR v."currentBranchId" = ${filters.branchId ?? null}::uuid)
+        AND h."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')
+      UNION ALL
+      SELECT
+        v."id" AS "vehicleId",
+        v."make" AS "make",
+        v."model" AS "model",
+        v."plateNumber" AS "plateNumber",
+        v."currentBranchId" AS "currentBranchId",
+        NULL AS "kind",
+        NULL AS "id",
+        NULL AS "blockType",
+        NULL AS "status",
+        NULL AS "start",
+        NULL AS "end",
+        NULL AS "reason"
+      FROM "vehicles" v
+      WHERE v."tenantId" = ${tenantId}::uuid
+        AND v."status" <> 'ARCHIVED'
+        AND (${filters.vehicleId ?? null}::uuid IS NULL OR v."id" = ${filters.vehicleId ?? null}::uuid)
+        AND (${filters.branchId ?? null}::uuid IS NULL OR v."currentBranchId" = ${filters.branchId ?? null}::uuid)
+        AND NOT EXISTS (
+          SELECT 1 FROM "vehicle_blocks" b
+          WHERE b."vehicleId" = v."id"
+            AND b."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "booking_holds" h
+          WHERE h."vehicleId" = v."id"
+            AND h."period" && tstzrange(${interval.start}::timestamptz, ${interval.end}::timestamptz, '[)')
+        )
+      ORDER BY "make", "model", "start"`;
+
+    const byVehicle = new Map<
+      string,
+      {
+        vehicleId: string;
+        make: string;
+        model: string;
+        plateNumber: string;
+        currentBranchId: string | null;
+        commitments: Array<{
+          id: string;
+          kind: 'BLOCK' | 'HOLD';
+          blockType: string | null;
+          status: string;
+          start: Date;
+          end: Date;
+          reason: string | null;
+        }>;
+      }
+    >();
+    for (const row of rows) {
+      let entry = byVehicle.get(row.vehicleId);
+      if (!entry) {
+        entry = {
+          vehicleId: row.vehicleId,
+          make: row.make,
+          model: row.model,
+          plateNumber: row.plateNumber,
+          currentBranchId: row.currentBranchId,
+          commitments: [],
+        };
+        byVehicle.set(row.vehicleId, entry);
+      }
+      // Placeholder rows (third UNION branch) mark vehicles that have no
+      // commitments in the window: keep the lane, skip the pseudo-row.
+      if (row.id && row.kind && row.status && row.start && row.end) {
+        entry.commitments.push({
+          id: row.id,
+          kind: row.kind,
+          blockType: row.blockType,
+          status: row.status,
+          start: row.start,
+          end: row.end,
+          reason: row.reason,
+        });
+      }
+    }
+    return [...byVehicle.values()];
+  }
 }
