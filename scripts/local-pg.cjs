@@ -108,9 +108,34 @@ async function main() {
   }
 
   const firstRun = !fs.existsSync(path.join(DATA_DIR, 'PG_VERSION'));
-  await pg.initialise();
-  await pg.start();
-  await pg.createDatabase(DB);
+  if (firstRun) {
+    await pg.initialise();
+  }
+
+  // Daemonize via pg_ctl so the postmaster survives this script's exit
+  // (EmbeddedPostgres#start keeps the server as a child of this process and
+  // it is reaped when the runner's process group ends).
+  const platform = require('@embedded-postgres/linux-x64');
+  const result = spawnSync(
+    platform.pg_ctl,
+    ['-D', DATA_DIR, '-l', path.join(DATA_DIR, 'server.log'), '-o', `-p ${PORT}`, '-w', 'start'],
+    { encoding: 'utf8', timeout: 60_000 },
+  );
+  if (result.status !== 0) {
+    throw new Error(`pg_ctl start failed: ${result.stderr ?? 'unknown error'}`);
+  }
+
+  const { Client } = require('pg');
+  const client = new Client({
+    connectionString: `postgresql://${USER}:${PASSWORD}@${HOST}:${PORT}/postgres`,
+  });
+  await client.connect();
+  const { rows } = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [DB]);
+  if (rows.length === 0) {
+    await client.query(`CREATE DATABASE "${DB}"`);
+  }
+  await client.end();
+
   console.log(
     firstRun
       ? `postgres: cluster initialised at ${DATA_DIR} and listening on ${HOST}:${PORT} (db: ${DB})`

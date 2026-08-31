@@ -398,3 +398,27 @@ Append one checkpoint per completed task or phase gate.
 ## Phase result
 
 `PHASE-03 — Fleet Foundation` — **GATE PASSED** (03-A categories, 03-B vehicles, 03-C media/documents, 03-D fleet UI complete; lint/type/build/unit/e2e all green from a fresh install). Next: PHASE-04 Availability Engine.
+
+## Checkpoint: 04-A — Interval Model
+
+- Task: `PHASE-04 / 04-A / 04-A01…A06`
+- Status: `DONE`
+- Date: `2026-08-30`
+- Summary: Single authoritative interval contract for every time-bounded commitment — half-open `[start,end)` UTC instants; overlap ⇔ `a.start < b.end && b.start < a.end` (back-to-back never conflicts); positive duration required. Operational block model (BLOCK_TYPES per schema; SCHEDULED/ACTIVE remove availability; COMPLETED/CANCELLED inert; explicit lifecycle transitions). Timezone conversion boundary: ISO-with-offset or zoned wall times only; DST fall-back resolves to the earlier occurrence, spring-forward gaps rejected; display formatting marked presentation-only. Schema: `vehicle_blocks` (04-A03) and `booking_holds` (04-A04) migrations — enums, tenant/vehicle FKs (cascade), interval indexes, hold expiry/channel/ownership.
+- Verification: unit 28 (interval 11, blocks 8, timezone 9 — incl. DST ambiguity/gap cases); e2e `availability-schema` suite (7): enum enforcement at DB level, UTC instant round-trip, cascade deletes of blocks+holds, hold ownership/expiry, domain contract guards persistence.
+- Architecture: `architecture/availability-engine.md` gained the normative interval-semantics section.
+- Commit: `32b6ae9`
+
+## Checkpoint: 04-B — Conflict Protection
+
+- Task: `PHASE-04 / 04-B / 04-B01…B07`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Conflict rules (blocks SCHEDULED/ACTIVE conflict; holds ACTIVE only; inert statuses excluded). PostgreSQL exclusion constraints via `btree_gist`: `vehicle_blocks_no_overlap` (partial on SCHEDULED/ACTIVE) and `booking_holds_no_overlap` (partial on ACTIVE) over generated `tstzrange [)` columns — database-level backstop so two overlapping commitments can never both persist. Commitment guard (04-B03/04/05): per-vehicle `FOR UPDATE` row lock serializing every availability-consuming write; lazy stale-hold expiry inside the same transaction; explicit pre-insert interval check; single retry on 40001/40P01; 23P01 translated to INTERVAL_CONFLICT (never retried).
+- Verification: e2e `conflict-protection` suite (5): back-to-back boundaries allowed, concurrent overlapping holds → exactly one persists (Promise.allSettled), CANCELLED block frees interval, stale ACTIVE holds expire lazily, DB constraint rejects overlapping blocks. Unit `commitment-guard.spec` (5): retry-once semantics for serialization/deadlock, no retry on exclusion violation, unrelated errors propagate, code classification.
+- Note: recovery — the workspace was reset mid-session; the uncommitted 04-B tree was recovered and committed as `27524a5` (rebase onto the original branch history preserved the final tree exactly). The `scripts/local-pg.cjs` runner now daemonizes the server via `pg_ctl` so it survives the runner process exit.
+- Commit: `27524a5`
+
+## Phase 04 progress
+
+04-A + 04-B complete. Full gate after 04-B: fresh install → prisma generate → 9 migrations on a fresh database → lint 0 → typecheck 0 → build 0 → unit 230 (api 202 + config 13 + api-client 5 + agency-web 6 + ui 4) → e2e 118 (15 suites incl. availability-schema + conflict-protection). Next: 04-C Availability Queries.
