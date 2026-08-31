@@ -422,3 +422,27 @@ Append one checkpoint per completed task or phase gate.
 ## Phase 04 progress
 
 04-A + 04-B complete. Full gate after 04-B: fresh install → prisma generate → 9 migrations on a fresh database → lint 0 → typecheck 0 → build 0 → unit 230 (api 202 + config 13 + api-client 5 + agency-web 6 + ui 4) → e2e 118 (15 suites incl. availability-schema + conflict-protection). Next: 04-C Availability Queries.
+
+## Checkpoint: 04-C — Availability Queries
+
+- Task: `PHASE-04 / 04-C / 04-C01…C08`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Computed availability reads under their own resource root `GET /api/v1/agencies/:agencyId/availability/…` (vehicles list, single vehicle, category capacity) — tenant scope + `vehicle.read`, interval validated at the boundary (409 INVALID_INTERVAL), location context validated against tenant-owned records (404 BRANCH_NOT_FOUND / DELIVERY_ZONE_NOT_FOUND). Single-vehicle answer: `{available, reasons[{code, blockType?, commitmentId?}], constraintsApplied, constraintsPending}` with reason codes VEHICLE_ARCHIVED / BLOCK_CONFLICT (maintenance + inspection travel via blockType) / HOLD_CONFLICT (live ACTIVE holds only; expired inert) / VEHICLE_AT_OTHER_BRANCH (pickup branch applied; returnBranch + deliveryZone reported as pending). Capacity = max(0, eligible − committed) per category, tenant-scoped. Reads never guarantee a future reservation (confirmation re-checks under the 04-B guard).
+- Verification: unit `availability.service.spec` (13, fake repository: reason computation, branch constraint, capacity math, boundary validation) + e2e `availability` suite (8: 401/403, available answer, block reasons, hold expiry, branch constraint, list+capacity, invalid intervals, tenant isolation + zone validation). Full gate green: lint 0, typecheck 0, build 0, unit 233, e2e 126 (16 suites).
+- Repairs: the list endpoint initially 500'd because the fleet controller's `GET /vehicles/:vehicleId` shadowed `/vehicles/availability` and cast the literal to uuid — availability moved to its own root (never reintroduce `/vehicles/availability`); hold-expiry fixture had a future `expiresAt` (fixed with `Date.now() − 60_000`).
+- Commit: `f337f86`
+
+
+## Checkpoint: 04-D — Scheduler (Phase 04 gate)
+
+- Task: `PHASE-04 / 04-D / 04-D01…D08`
+- Status: `DONE` — **PHASE-04 GATE PASSED**
+- Date: `2026-08-31`
+- Summary: Timeline feed `GET /api/v1/agencies/:agencyId/availability/timeline?start&end[&vehicleId][&branchId]` (agency staff, tenant scope + `vehicle.read`) — every active vehicle lane (including empty ones), all window-intersecting blocks and holds with kind/type/status/reason and instant bounds, plus `conflicting` computed from the shared half-open overlap contract: live block (SCHEDULED/ACTIVE) × live hold (ACTIVE unexpired) pairs flagged on both sides; block×block and hold×hold unflagged (only the guard-protected cross-type pair). Vehicle filter (04-D04) and branch filter (04-D05) pushed down into the SQL. Day/week/month calendar views are presentation concerns of the phase 12-B UI built on this feed. Cache boundary (04-D06) documented in `architecture/availability-engine.md`: no availability cache ships in phase 04 — reads are computed per request and the exclusion constraints are the single invalidation point; future caches must be tenant-scoped, event-driven (outbox → Redis), optional, and never used for confirmation. Visual QA (04-D07): dev stack (JWKS + API 4000 + vite 3001) verified live — web 200, `/api` proxy 200, seeded agency → timeline 200 with overlapping MAINTENANCE block + marketplace hold both `conflicting: true`, inverted interval → 409 INVALID_INTERVAL (`scripts/qa-04d-smoke.cjs`, dev-only).
+- Verification: unit 5 new timeline tests (grouping/serialization, conflict flags incl. expired-hold and cancelled-block exclusion, block×block unflagged, filter forwarding) — availability module 6 suites / 58; e2e 3 new timeline tests (window + conflicts, vehicle/branch filters incl. empty-lane vehicle, auth + boundary) — availability suite 11/11. Full gate green: lint 0, typecheck 0, build 0, unit 238 (23+1+1 suites: 220 + 5 + 13), e2e 129 (16 suites).
+- Commit: `a34203f`
+
+## Phase result
+
+`PHASE-04 — Availability Engine` — **GATE PASSED** (04-A interval model, 04-B conflict protection, 04-C availability queries, 04-D scheduler timeline + cache boundary complete; lint/type/build/unit/e2e all green). Next: PHASE-05 Booking Engine (05-A Quote/Request).
