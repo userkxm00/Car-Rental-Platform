@@ -6,15 +6,15 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-05`
-- Current workstream: `05-B Booking Aggregate`
-- Current task: `05-B01` (booking schema — see WBS)
-- Last completed task: `05-A07` (quote tests — 05-A Quote/Request COMPLETE)
+- Current workstream: `05-C State Machine`
+- Current task: `05-C01` (implement DRAFT — see WBS)
+- Last completed task: `05-B08` (booking aggregate tests — 05-B Booking Aggregate COMPLETE)
 - Last completed phase: `PHASE-04 Availability Engine`
 - Current attempt: `1`
-- Last validation: full gate after 05-A — lint 0 → typecheck 0 → build 0 → unit 250 (api 232, config 5, api-client 5, agency-web 6, ui 4) → e2e 137 (17 suites incl. quotes) — 2026-08-31
-- Last known good commit: `9f4221b` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
+- Last validation: full gate after 05-B — lint 0 → typecheck 0 → build 0 → unit 262 (api 244, config 5, api-client 5, agency-web 6, ui 4) → e2e 145 (18 suites incl. bookings) — 2026-08-31
+- Last known good commit: `6780674` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
 - Blocker: none
-- Next action: execute PHASE-05 workstream 05-B Booking Aggregate (booking schema → numbering → vehicle/category bookings → holds → price snapshot linkage → status history → aggregate tests), then 05-C State Machine, 05-D Lifecycle Operations, then the 05 gate
+- Next action: execute PHASE-05 workstream 05-C State Machine (DRAFT→HOLD→PENDING_CONFIRMATION→CONFIRMED→READY_FOR_PICKUP→ACTIVE→RETURN_PENDING→RETURNED→SETTLEMENT_PENDING→COMPLETED + exceptional states, every transition authorized), then 05-D Lifecycle Operations, then the 05 gate
 - Last updated: 2026-08-31
 
 ## Canonical execution model
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-05 / 05-B / 05-B01`
+`PHASE-05 / 05-C / 05-C01`
 
 ## Phase 04 result (Availability Engine)
 
