@@ -474,3 +474,16 @@ Append one checkpoint per completed task or phase gate.
 ## Phase 05 progress
 
 05-A + 05-B complete. Next: 05-C State Machine (DRAFT→HOLD→PENDING_CONFIRMATION→CONFIRMED→READY_FOR_PICKUP→ACTIVE→RETURN_PENDING→RETURNED→SETTLEMENT_PENDING→COMPLETED + exceptional states, every transition authorized).
+
+## Checkpoint: 05-C — State Machine
+
+- Task: `PHASE-05 / 05-C / 05-C01…C12`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Operative state machine in `apps/api/src/bookings/domain/booking-transitions.ts` — 12 named commands, each with a fixed source set, one target state and an explicit permission (05-C12). DRAFT→HOLD (05-B05) → requestConfirmation (DRAFT|HOLD→PENDING_CONFIRMATION, attaches customer + tenant-owned/target-matching/unexpired quote) → confirm (PENDING_CONFIRMATION→CONFIRMED: customer required, guard-exempt interval re-check, live hold required, hold refreshed to interval end, 05-B06 price snapshot captured from the quote — null until PHASE-06; category bookings re-check capacity) → markReady (CONFIRMED→READY_FOR_PICKUP, assignment required) → checkOut (READY_FOR_PICKUP→ACTIVE, hold CONSUMED) → requestReturn → completeReturn → openSettlement → complete (05-C07…C10). Exceptional (05-C11): cancel (reason required, hold RELEASED), reject, expire (only when the own hold actually expired), markNoShow (reason required). Every applied transition updates the status guarded by the expected source state and appends a `booking_status_history` row in the same transaction; the API exposes only command endpoints — no direct status mutation (05-C12). `architecture/booking-state-machine.md` gained the implemented machine + command table.
+- Verification: unit `booking-transitions.spec` (6: table completeness, happy path, exceptional paths, structured rejections, per-command permissions) + service command tests (30 total in the bookings suite: quote linkage/mismatch/expiry, confirm preconditions, hold refresh + snapshot capture, assignment requirement, hold consume/release/expire, reason requirements, invalid transitions) and e2e `booking-state.e2e-spec` (7: full happy path incl. hold lifecycle + snapshot + full history, disallowed transitions, confirm preconditions, quote mismatch, cancel frees the interval, expire/no-show, FINANCE 403 per-command authorization). Full gate green: lint 0, typecheck 0, build 0, unit 280 (262 + 5 + 13), e2e 152 (19 suites).
+- Commit: `714c800`
+
+## Phase 05 progress
+
+05-A + 05-B + 05-C complete. Next: 05-D Lifecycle Operations (customer/agency cancellation policy, hold expiration automation, no-show workflow, extension requests + conflict handling, vehicle reassignment, walk-in/manual bookings, idempotent commands, audit events, integration tests, phase 05 gate).
