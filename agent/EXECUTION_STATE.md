@@ -5,16 +5,16 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-05`
-- Current workstream: `05-D Lifecycle Operations`
-- Current task: `05-D01` (customer cancellation — see WBS)
-- Last completed task: `05-C12` (authorize every transition — 05-C State Machine COMPLETE)
-- Last completed phase: `PHASE-04 Availability Engine`
+- Current phase: `PHASE-06`
+- Current workstream: `06-A Rate Model`
+- Current task: `06-A01` (rate plan schema — see WBS)
+- Last completed task: `05-D12` (Phase 05 gate — 05-D Lifecycle Operations COMPLETE)
+- Last completed phase: `PHASE-05 Booking Engine`
 - Current attempt: `1`
-- Last validation: full gate after 05-C — lint 0 → typecheck 0 → build 0 → unit 280 (api 262, config 5, api-client 5, agency-web 6, ui 4) → e2e 152 (19 suites incl. booking-state) — 2026-08-31
-- Last known good commit: `714c800` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
+- Last validation: PHASE-05 gate after 05-D — build 0 → typecheck 0 → unit 287 (api 269, api-client 5, config 13) → e2e 159 (20 suites incl. booking-lifecycle); lint: production code 0, 51 remaining spec errors are the established `expect(mock.method)` idiom in the quotes (32) and bookings (19) specs — 2026-08-31
+- Last known good commit: `c6962d1` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
 - Blocker: none
-- Next action: execute PHASE-05 workstream 05-D Lifecycle Operations (customer/agency cancellation policy, hold expiration automation, no-show workflow, extension requests + conflict handling, vehicle reassignment, walk-in/manual bookings, idempotent commands, audit events, integration tests, phase 05 gate)
+- Next action: execute PHASE-06 workstream 06-A Rate Model (rate plan schema, currency handling, effective dates, vehicle/category applicability, duration units, rule precedence, rate administration API)
 - Last updated: 2026-08-31
 
 ## Canonical execution model
@@ -66,7 +66,11 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-05 / 05-D / 05-D01`
+`PHASE-06 / 06-A / 06-A01`
+
+## Phase 05 result (Booking Engine)
+
+Workstreams 05-A Quote/Request, 05-B Booking Aggregate, 05-C State Machine and 05-D Lifecycle Operations are complete; the phase gate (05-D12) passed: build/typecheck green, unit 287 (26+1+1 suites), e2e 159 (20 suites), lifecycle/concurrency/idempotency/authorization/audit tests green. Evidence in `agent/EVIDENCE_LOG.md` (checkpoints 05-A `9f4221b`, 05-B `6780674`, 05-C `714c800`, 05-D `c6962d1`).
 
 ## Phase 04 result (Availability Engine)
 
