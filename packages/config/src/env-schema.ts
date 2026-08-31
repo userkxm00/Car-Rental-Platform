@@ -134,6 +134,11 @@ const envSchemaFields = {
     .regex(/^[A-Z]{3}$/, 'must be a 3-letter ISO 4217 code')
     .default('DZD'),
 
+  // ── Booking quotes ─────────────────────────────────────────────────────
+  /** Quote lifetime in minutes (05-A05); expired quotes are never treated
+   * as current prices (docs/06-business-rules.md). */
+  QUOTE_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+
   // ── Background jobs ────────────────────────────────────────────────────
   QUEUE_ENABLED: boolFromEnv.default(true),
 };

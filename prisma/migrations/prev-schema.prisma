@@ -47,6 +47,7 @@ model User {
   updatedAt       DateTime         @updatedAt
   identities      UserIdentity[]
   memberships     Membership[]
+  quoteRecords    QuoteRecord[]
 
   @@map("users")
 }
@@ -103,6 +104,7 @@ model Tenant {
   vehicles          Vehicle[]
   vehicleBlocks     VehicleBlock[]
   bookingHolds      BookingHold[]
+  quoteRecords      QuoteRecord[]
 
   @@map("tenants")
 }
@@ -209,8 +211,10 @@ model Branch {
   contacts   Json?
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
-  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  location   Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location     Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  quotePickups QuoteRecord[] @relation("QuotePickupBranch")
+  quoteReturns QuoteRecord[] @relation("QuoteReturnBranch")
 
   @@unique([tenantId, code])
   @@index([locationId])
@@ -259,7 +263,8 @@ model DeliveryZone {
   feePolicyReference String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quoteRecords      QuoteRecord[]
 
   @@index([tenantId])
   @@map("delivery_zones")
@@ -290,6 +295,7 @@ model VehicleCategory {
   vehicles         Vehicle[]
   features         CategoryFeature[]
   bookingHolds     BookingHold[]
+  quoteRecords     QuoteRecord[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -332,6 +338,7 @@ model Vehicle {
   documents       VehicleDocument[]
   blocks          VehicleBlock[]
   holds           BookingHold[]
+  quoteRecords    QuoteRecord[]
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
@@ -412,6 +419,44 @@ model BookingHold {
   @@index([vehicleId, startsAt, endsAt])
   @@index([expiresAt])
   @@map("booking_holds")
+}
+
+enum QuoteInventoryMode {
+  VEHICLE
+  CATEGORY
+}
+
+/// Persisted quote record (05-A): immutable request context + the
+/// server-computed availability answer and pricing slot at creation time
+/// (architecture/database-schema-v1.md §8 quote_records). Pricing is null
+/// until the pricing engine (PHASE-06) registers a provider.
+model QuoteRecord {
+  id               String            @id @default(uuid()) @db.Uuid
+  tenantId         String            @db.Uuid
+  channel          BookingChannel
+  inventoryMode    QuoteInventoryMode
+  vehicleId        String?           @db.Uuid
+  categoryId       String?           @db.Uuid
+  pickupBranchId   String?           @db.Uuid
+  returnBranchId   String?           @db.Uuid
+  deliveryZoneId   String?           @db.Uuid
+  startsAt         DateTime
+  endsAt           DateTime
+  expiresAt        DateTime
+  availabilityJson Json
+  pricingJson      Json?
+  createdBy        String?           @db.Uuid
+  createdAt        DateTime          @default(now())
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehicle          Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  category         VehicleCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  pickupBranch     Branch?           @relation("QuotePickupBranch", fields: [pickupBranchId], references: [id], onDelete: SetNull)
+  returnBranch     Branch?           @relation("QuoteReturnBranch", fields: [returnBranchId], references: [id], onDelete: SetNull)
+  deliveryZone     DeliveryZone?     @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  creator          User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@map("quote_records")
 }
 
 enum VehicleStatus {

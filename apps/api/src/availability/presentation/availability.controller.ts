@@ -1,8 +1,8 @@
-import { Controller, Get, NotFoundException, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { PermissionGuard, RequirePermission } from '../../authorization/guard/permission.guard';
 import { AgencyScopeGuard } from '../../authorization/scope/tenant-scope';
 import { Permission } from '../../authorization/permissions';
-import { PrismaService } from '../../prisma/prisma.service';
+import { LocationContextService } from '../application/location-context.service';
 import { AvailabilityService } from '../application/availability.service';
 
 /**
@@ -35,7 +35,7 @@ import { AvailabilityService } from '../application/availability.service';
 export class AvailabilityController {
   constructor(
     private readonly service: AvailabilityService,
-    private readonly prisma: PrismaService,
+    private readonly locationContext: LocationContextService,
   ) {}
 
   @Get('vehicles')
@@ -52,7 +52,7 @@ export class AvailabilityController {
     @Query('deliveryZoneId') deliveryZoneId?: string,
   ): Promise<unknown> {
     const interval = this.service.validateRequestInterval(start, end);
-    const context = await this.resolveContext(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
+    const context = await this.locationContext.resolve(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
     return this.service.listAvailableVehicles(agencyId, interval, context, { categoryId, branchId });
   }
 
@@ -69,7 +69,7 @@ export class AvailabilityController {
     @Query('deliveryZoneId') deliveryZoneId?: string,
   ): Promise<unknown> {
     const interval = this.service.validateRequestInterval(start, end);
-    const context = await this.resolveContext(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
+    const context = await this.locationContext.resolve(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
     return this.service.vehicleAvailability(agencyId, vehicleId, interval, context);
   }
 
@@ -86,7 +86,7 @@ export class AvailabilityController {
     @Query('deliveryZoneId') deliveryZoneId?: string,
   ): Promise<unknown> {
     const interval = this.service.validateRequestInterval(start, end);
-    const context = await this.resolveContext(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
+    const context = await this.locationContext.resolve(agencyId, { pickupBranchId, returnBranchId, deliveryZoneId });
     return this.service.categoryCapacity(agencyId, categoryId, interval, context);
   }
 
@@ -110,50 +110,4 @@ export class AvailabilityController {
     return this.service.scheduleTimeline(agencyId, interval, { vehicleId, branchId });
   }
 
-  /**
-   * 04-C06: validates the location context against tenant-owned records.
-   * A referenced branch must belong to this agency; a referenced delivery
-   * zone must belong to this agency and be active. Zone-based vehicle
-   * eligibility itself is a spatial-phase concern — the context is carried
-   * through and reported as a pending constraint, never silently applied.
-   */
-  private async resolveContext(
-    agencyId: string,
-    input: { pickupBranchId?: string; returnBranchId?: string; deliveryZoneId?: string },
-  ): Promise<{ pickupBranchId?: string; returnBranchId?: string; deliveryZoneId?: string }> {
-    const context = { ...input };
-    for (const branchId of [input.pickupBranchId, input.returnBranchId]) {
-      if (branchId) {
-        const branch = await this.prisma.branch.findFirst({
-          where: { id: branchId, tenantId: agencyId },
-          select: { id: true },
-        });
-        if (!branch) {
-          throw new NotFoundException({
-            code: 'BRANCH_NOT_FOUND',
-            message: 'Branch not found in this agency.',
-          });
-        }
-      }
-    }
-    if (input.deliveryZoneId) {
-      const zone = await this.prisma.deliveryZone.findFirst({
-        where: { id: input.deliveryZoneId, tenantId: agencyId },
-        select: { id: true, active: true },
-      });
-      if (!zone) {
-        throw new NotFoundException({
-          code: 'DELIVERY_ZONE_NOT_FOUND',
-          message: 'Delivery zone not found in this agency.',
-        });
-      }
-      if (!zone.active) {
-        throw new NotFoundException({
-          code: 'DELIVERY_ZONE_NOT_FOUND',
-          message: 'Delivery zone is inactive.',
-        });
-      }
-    }
-    return context;
-  }
 }

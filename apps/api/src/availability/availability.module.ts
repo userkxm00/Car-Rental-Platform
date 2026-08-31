@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '../authorization/authorization.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AvailabilityService } from './application/availability.service';
+import { LocationContextService } from './application/location-context.service';
 import { AvailabilityRepository } from './infrastructure/availability.repository';
 import { AvailabilityController } from './presentation/availability.controller';
 
@@ -13,7 +14,7 @@ import { AvailabilityController } from './presentation/availability.controller';
 @Module({
   imports: [IdentityModule, AuthorizationModule],
   controllers: [AvailabilityController],
-  providers: [AvailabilityRepository, AvailabilityService],
-  exports: [AvailabilityRepository, AvailabilityService],
+  providers: [AvailabilityRepository, AvailabilityService, LocationContextService],
+  exports: [AvailabilityRepository, AvailabilityService, LocationContextService],
 })
 export class AvailabilityModule {}
