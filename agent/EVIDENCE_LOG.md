@@ -460,3 +460,17 @@ Append one checkpoint per completed task or phase gate.
 ## Phase 05 progress
 
 05-A complete. Next: 05-B Booking Aggregate (booking schema → numbering → vehicle/category bookings → holds → price snapshot linkage → status history → aggregate tests).
+
+## Checkpoint: 05-B — Booking Aggregate
+
+- Task: `PHASE-05 / 05-B / 05-B01…B08`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Booking module (`apps/api/src/bookings/`). Schema (05-B01): `bookings` (channel, inventoryMode, requestedCategoryId / assignedVehicleId, pickup/return/delivery context, interval, currency = tenant default, status enum with the operative 05-C list), `booking_status_history` (append-only: from/to, actor, reason, correlation), `booking_price_snapshots` (pricingJson, filled by PHASE-06 — the 05-B06 linkage), `booking_counters` (per-tenant sequence), and `booking_holds.bookingId` (05-B05). The quote inventory type was renamed `QuoteInventoryMode → InventoryMode` (shared). Migration `20260831010000_booking_aggregate` (11 total). Numbering (05-B02): `BK-{year}-{6-digit}` from an atomic upsert counter (`INSERT … ON CONFLICT DO UPDATE … RETURNING`), unique per tenant. Vehicle bookings (05-B03): creation re-checks availability server-side — unavailable → 409 BOOKING_UNAVAILABLE with reasons; category bookings (05-B04) check tenant-owned/active category + remaining capacity, no vehicle assignment. Holds (05-B05): explicit `POST …/bookings/:bookingId/hold` — DRAFT→HOLD through the 04-B commitment guard in one protected transaction (per-vehicle lock, stale-hold expiry, pre-insert check, exclusion-constraint backstop); hold TTL from `HOLD_TTL_MINUTES` (config, default 30); guard conflicts → 409 INTERVAL_CONFLICT; re-hold → BOOKING_INVALID_TRANSITION. History (05-B07): every creation and hold appends an entry; responses carry newest-first history. API: `POST/GET /api/v1/agencies/:agencyId/bookings[/:bookingId]` + hold (AgencyScopeGuard + booking.create / booking.read). Statuses beyond DRAFT/HOLD are the 05-C state-machine commands — clients can never set a status directly.
+- Verification: unit `bookings.service.spec` (12: boundary validation, availability rejection with reasons, capacity rejection/acceptance, hold placement + TTL, category/non-DRAFT hold rejections, guard-conflict translation, tenant reads, numbering format) and e2e `bookings.e2e-spec` (8: auth/membership, DRAFT creation + per-tenant numbering + history, unavailable rejection, category capacity exhaustion, guard-protected hold + overlapping-hold INTERVAL_CONFLICT + post-hold creation rejection, boundary matrix, tenant validation, cross-tenant isolation incl. numbering restart). Full gate green: lint 0, typecheck 0, build 0, unit 262 (244 + 5 + 13), e2e 145 (18 suites).
+- Notes: creation is an advisory availability check — a booking is only committed to inventory when its hold is placed under the guard; docs/10 states map onto the operative list (QUOTED = linked quote record, PREPARING/CHECKED_OUT = READY_FOR_PICKUP, IN_RENTAL = ACTIVE, RETURNING = RETURN_PENDING, INSPECTION_PENDING = RETURNED), extension/overdue are records (05-D) not statuses.
+- Commit: `6780674`
+
+## Phase 05 progress
+
+05-A + 05-B complete. Next: 05-C State Machine (DRAFT→HOLD→PENDING_CONFIRMATION→CONFIRMED→READY_FOR_PICKUP→ACTIVE→RETURN_PENDING→RETURNED→SETTLEMENT_PENDING→COMPLETED + exceptional states, every transition authorized).
