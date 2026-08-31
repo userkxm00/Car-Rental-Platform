@@ -45,9 +45,11 @@ model User {
   status          UserStatus       @default(ACTIVE)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
-  identities      UserIdentity[]
-  memberships     Membership[]
-  quoteRecords    QuoteRecord[]
+  identities       UserIdentity[]
+  memberships      Membership[]
+  quoteRecords     QuoteRecord[]
+  bookingsAsCustomer Booking[] @relation("BookingCustomer")
+  bookingsCreated    Booking[] @relation("BookingCreator")
 
   @@map("users")
 }
@@ -105,6 +107,8 @@ model Tenant {
   vehicleBlocks     VehicleBlock[]
   bookingHolds      BookingHold[]
   quoteRecords      QuoteRecord[]
+  bookings          Booking[]
+  bookingCounter    BookingCounter?
 
   @@map("tenants")
 }
@@ -213,8 +217,10 @@ model Branch {
   updatedAt  DateTime     @updatedAt
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location     Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  quotePickups QuoteRecord[] @relation("QuotePickupBranch")
-  quoteReturns QuoteRecord[] @relation("QuoteReturnBranch")
+  quotePickups   QuoteRecord[] @relation("QuotePickupBranch")
+  quoteReturns   QuoteRecord[] @relation("QuoteReturnBranch")
+  bookingPickups Booking[]     @relation("BookingPickupBranch")
+  bookingReturns Booking[]     @relation("BookingReturnBranch")
 
   @@unique([tenantId, code])
   @@index([locationId])
@@ -265,6 +271,7 @@ model DeliveryZone {
   updatedAt         DateTime @updatedAt
   tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   quoteRecords      QuoteRecord[]
+  bookings          Booking[]
 
   @@index([tenantId])
   @@map("delivery_zones")
@@ -296,6 +303,7 @@ model VehicleCategory {
   features         CategoryFeature[]
   bookingHolds     BookingHold[]
   quoteRecords     QuoteRecord[]
+  bookingsRequested Booking[]        @relation("BookingRequestedCategory")
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -339,6 +347,7 @@ model Vehicle {
   blocks          VehicleBlock[]
   holds           BookingHold[]
   quoteRecords    QuoteRecord[]
+  bookingsAssigned Booking[]         @relation("BookingAssignedVehicle")
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
@@ -410,10 +419,12 @@ model BookingHold {
   status     BookingHoldStatus @default(ACTIVE)
   channel    BookingChannel
   createdBy  String?           @db.Uuid
+  bookingId  String?           @db.Uuid
   createdAt  DateTime          @default(now())
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehicle    Vehicle?          @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   category   VehicleCategory?  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  booking    Booking?          @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([vehicleId, startsAt, endsAt])
@@ -421,7 +432,7 @@ model BookingHold {
   @@map("booking_holds")
 }
 
-enum QuoteInventoryMode {
+enum InventoryMode {
   VEHICLE
   CATEGORY
 }
@@ -434,7 +445,7 @@ model QuoteRecord {
   id               String            @id @default(uuid()) @db.Uuid
   tenantId         String            @db.Uuid
   channel          BookingChannel
-  inventoryMode    QuoteInventoryMode
+  inventoryMode    InventoryMode
   vehicleId        String?           @db.Uuid
   categoryId       String?           @db.Uuid
   pickupBranchId   String?           @db.Uuid
@@ -454,9 +465,111 @@ model QuoteRecord {
   returnBranch     Branch?           @relation("QuoteReturnBranch", fields: [returnBranchId], references: [id], onDelete: SetNull)
   deliveryZone     DeliveryZone?     @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
   creator          User?             @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  bookings         Booking[]
 
   @@index([tenantId, createdAt])
   @@map("quote_records")
+}
+
+enum BookingStatus {
+  DRAFT
+  HOLD
+  PENDING_CONFIRMATION
+  CONFIRMED
+  READY_FOR_PICKUP
+  ACTIVE
+  RETURN_PENDING
+  RETURNED
+  SETTLEMENT_PENDING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+  REJECTED
+}
+
+/// Booking aggregate root (05-B01): the committed rental workflow record
+/// (architecture/database-schema-v1.md §6 bookings). Money amounts arrive
+/// with the pricing engine (PHASE-06) via booking_price_snapshots; the
+/// currency is the tenant default captured at creation.
+model Booking {
+  id                  String              @id @default(uuid()) @db.Uuid
+  tenantId            String              @db.Uuid
+  bookingNumber       String
+  channel             BookingChannel
+  inventoryMode       InventoryMode
+  status              BookingStatus       @default(DRAFT)
+  customerId          String?             @db.Uuid
+  createdBy           String?             @db.Uuid
+  quoteId             String?             @db.Uuid
+  requestedCategoryId String?             @db.Uuid
+  assignedVehicleId   String?             @db.Uuid
+  pickupBranchId      String?             @db.Uuid
+  returnBranchId      String?             @db.Uuid
+  deliveryZoneId      String?             @db.Uuid
+  startsAt            DateTime
+  endsAt              DateTime
+  currency            String              @default("DZD")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer            User?               @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  creator             User?               @relation("BookingCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  quote               QuoteRecord?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  requestedCategory   VehicleCategory?    @relation("BookingRequestedCategory", fields: [requestedCategoryId], references: [id], onDelete: SetNull)
+  assignedVehicle     Vehicle?            @relation("BookingAssignedVehicle", fields: [assignedVehicleId], references: [id], onDelete: SetNull)
+  pickupBranch        Branch?             @relation("BookingPickupBranch", fields: [pickupBranchId], references: [id], onDelete: SetNull)
+  returnBranch        Branch?             @relation("BookingReturnBranch", fields: [returnBranchId], references: [id], onDelete: SetNull)
+  deliveryZone        DeliveryZone?       @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
+  statusHistory       BookingStatusHistory[]
+  priceSnapshots      BookingPriceSnapshot[]
+  holds               BookingHold[]
+
+  @@unique([tenantId, bookingNumber])
+  @@index([tenantId, createdAt])
+  @@index([assignedVehicleId])
+  @@index([requestedCategoryId])
+  @@map("bookings")
+}
+
+/// Append-only lifecycle transitions (05-B07): every status write goes
+/// through here with actor, reason and correlation id.
+model BookingStatusHistory {
+  id            String        @id @default(uuid()) @db.Uuid
+  bookingId     String        @db.Uuid
+  fromStatus    BookingStatus?
+  toStatus      BookingStatus
+  actorUserId   String?       @db.Uuid
+  reason        String?
+  correlationId String?
+  createdAt     DateTime      @default(now())
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt])
+  @@map("booking_status_history")
+}
+
+/// Immutable commercial snapshot linkage (05-B06): the snapshot rows are
+/// filled by the pricing engine (PHASE-06) at confirmation/invoicing.
+model BookingPriceSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  bookingId   String   @db.Uuid
+  pricingJson Json?
+  capturedAt  DateTime @default(now())
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_price_snapshots")
+}
+
+/// Per-tenant booking number counter (05-B02): the source of the
+/// human-readable, tenant-unique booking number sequence.
+model BookingCounter {
+  tenantId   String @id @db.Uuid
+  nextNumber Int    @default(1)
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("booking_counters")
 }
 
 enum VehicleStatus {

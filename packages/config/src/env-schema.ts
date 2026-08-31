@@ -138,6 +138,9 @@ const envSchemaFields = {
   /** Quote lifetime in minutes (05-A05); expired quotes are never treated
    * as current prices (docs/06-business-rules.md). */
   QUOTE_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+  /** Booking inventory-hold lifetime in minutes (05-B05); stale ACTIVE
+   * holds are expired lazily inside the commitment guard (04-B05). */
+  HOLD_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
   // ── Background jobs ────────────────────────────────────────────────────
   QUEUE_ENABLED: boolFromEnv.default(true),

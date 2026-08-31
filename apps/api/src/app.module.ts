@@ -10,6 +10,7 @@ import { MediaModule } from './media/media.module';
 import { MembershipsModule } from './memberships/memberships.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { QuotesModule } from './quotes/quotes.module';
+import { BookingsModule } from './bookings/bookings.module';
 import { TenantsModule } from './tenants/tenants.module';
 
 /**
@@ -32,6 +33,7 @@ import { TenantsModule } from './tenants/tenants.module';
     MediaModule,
     AvailabilityModule,
     QuotesModule,
+    BookingsModule,
     HealthModule,
   ],
 })
