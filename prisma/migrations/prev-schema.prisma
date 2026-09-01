@@ -578,7 +578,9 @@ model BookingPriceSnapshot {
   capturedAt  DateTime @default(now())
   booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  @@index([bookingId])
+  // 06-D08: one immutable snapshot per booking — captured once at
+  // confirmation, never rewritten.
+  @@unique([bookingId])
   @@map("booking_price_snapshots")
 }
 

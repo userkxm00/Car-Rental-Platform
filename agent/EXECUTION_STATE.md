@@ -7,14 +7,14 @@ This file is the persistent checkpoint for autonomous implementation.
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-06`
 - Current workstream: `06-D Financial Truth`
-- Current task: `06-D01` (exact money library — see WBS)
-- Last completed task: `06-C08` (deposit pricing — 06-C Commercial Adjustments COMPLETE)
+- Current task: `06-D10` (phase gate — HUMAN DECISION checkpoint)
+- Last completed task: `06-D09` (pricing concurrency tests — 06-D COMPLETE, gate pending review)
 - Last completed phase: `PHASE-05 Booking Engine`
 - Current attempt: `1`
-- Last validation: after 06-C — build 0 → typecheck 0 → unit 341 (api, 31 suites) → e2e 171 (22 suites incl. commercial); lint: pricing production code 0, remaining spec errors are the established `expect(mock.method)` idiom — 2026-09-01
-- Last known good commit: `92c231c` on `arena/01a05097-car-rental-platform` (pushed; origin/arena matches)
+- Last validation: after 06-D — build 0 → typecheck 0 → unit 356 (api, 33 suites) → e2e 175 (23 suites incl. pricing-truth); lint: pricing production code 0, remaining spec errors are the established `expect(mock.method)` idiom — 2026-09-01
+- Last known good commit: `92c231c` on `arena/01a05097-car-rental-platform` (pushed; 06-D commits pending push)
 - Blocker: none
-- Next action: execute PHASE-06 workstream 06-D Financial Truth (exact money, rounding, DZD defaults, quote/booking snapshots, concurrency tests, 06-D10 gate)
+- Next action: PHASE-06 gate (06-D10) — representative pricing scenarios verified with reproducible server totals; STOP for human decision
 - Last updated: 2026-09-01
 
 ## Canonical execution model

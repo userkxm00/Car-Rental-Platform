@@ -14,7 +14,11 @@ import {
   type QuoteResponse,
   type ValidatedQuoteRequest,
 } from '../domain/quote-contract';
-import { QUOTE_PRICING_PORT, type QuotePricingPort } from './ports/quote-pricing.port';
+import {
+  QUOTE_PRICING_NOT_CONFIGURED_CODE,
+  QUOTE_PRICING_PORT,
+  type QuotePricingPort,
+} from './ports/quote-pricing.port';
 import { QuotesRepository, type QuoteRecordRow } from '../infrastructure/quotes.repository';
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,11 +125,15 @@ export class QuotesService {
 
     const availability = await this.computeAvailability(tenantId, request, context);
 
-    // 05-A04: the pricing boundary. Null until the pricing engine (PHASE-06)
-    // registers a provider — consumers must treat an unpriced quote as not
-    // bookable, never as a zero-price offer.
-    const pricing: QuotePricingPayload | null = this.pricing
-      ? await this.pricing.computeQuotePricing({
+    // 05-A04: the pricing boundary. The pricing engine (PHASE-06 / 06-D)
+    // computes the authoritative total through the port; when no rate
+    // plan applies the provider signals PRICING_NOT_CONFIGURED and the
+    // quote keeps `pricing: null` — consumers must treat an unpriced
+    // quote as not bookable, never as a zero-price offer.
+    let pricing: QuotePricingPayload | null = null;
+    if (this.pricing) {
+      try {
+        pricing = await this.pricing.computeQuotePricing({
           tenantId,
           mode: request.mode,
           vehicleId: request.vehicleId ?? undefined,
@@ -135,8 +143,13 @@ export class QuotesService {
           pickupBranchId: request.pickupBranchId ?? undefined,
           returnBranchId: request.returnBranchId ?? undefined,
           deliveryZoneId: request.deliveryZoneId ?? undefined,
-        })
-      : null;
+        });
+      } catch (error) {
+        if (!this.isPricingNotConfigured(error)) {
+          throw error;
+        }
+      }
+    }
 
     const expiresAt = new Date(Date.now() + this.env.QUOTE_TTL_MINUTES * 60_000);
     const row = await this.repository.create({
@@ -232,5 +245,13 @@ export class QuotesService {
       availability: row.availabilityJson,
       pricing: row.pricingJson,
     };
+  }
+
+  /** The engine's stable "no pricing applies" signal (05-A04/06-D06). */
+  private isPricingNotConfigured(error: unknown): boolean {
+    return (
+      error instanceof ConflictException &&
+      (error.getResponse() as { code?: unknown }).code === QUOTE_PRICING_NOT_CONFIGURED_CODE
+    );
   }
 }

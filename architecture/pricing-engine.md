@@ -262,10 +262,51 @@ On top of the 06-A/06-B layers (`apps/api/src/pricing/`):
   deactivation is PATCH — no hard deletes (price history stays
   reconstructible).
 
-The `QUOTE_PRICING_PORT` provider is still unregistered (quotes remain
-`pricing: null` and not bookable-as-priced) until the engine can compute:
-rate model (06-A) → time rules (06-B) → commercial adjustments (06-C,
-done) → financial truth + snapshots (06-D).
+## Implemented (06-D — financial truth)
+
+The engine now computes end-to-end (`apps/api/src/pricing/`):
+
+- **Exact money (06-D01…D04)**: `pricing/domain/money.ts` — every
+  authoritative value is an integer minor-unit amount; the precision
+  table carries DZD/EUR/USD/MAD at 2 decimals and TND at 3; DZD is the
+  R1 default/calculation currency. Binary floating point never
+  participates in totals.
+- **Rounding (06-D02)**: the single entry point
+  `roundToCurrencyMinor` (halves away from zero) rounds the final total
+  to the currency's own precision, and the breakdown always reconciles —
+  when rounding moves the total, a `ROUNDING_ADJUSTMENT` line keeps
+  `Σ breakdown = totalMinor` exactly.
+- **The calculator (06-D05)**: `pricing/domain/quote-calculator.ts` —
+  one pure function composing the pipeline: rate-plan selection
+  (06-A06) → duration ladder + time adjustments (06-B, fast path off
+  until a tenant-level switch exists) → promotion/coupon (coupon wins;
+  promotions never stack) → extras (catalog amounts, client quantities
+  only) → delivery/distance/one-way/after-hours fees (straight-line km
+  between branch coordinates; after-hours occurrences per pickup/return
+  instant against branch location hours in the tenant timezone) →
+  deposit (vehicle > category > global, separate from the total).
+  Identical inputs produce identical totals. Coupons/extras are
+  optional inputs — the R1 quote request carries neither, so they are
+  consumed by booking/payment flows that carry codes and selections.
+- **Quote pricing (06-D06)**: `QuotePricingProvider` registers the
+  `QUOTE_PRICING_PORT`; quotes now carry the itemized
+  `{currency, totalMinor, breakdown, depositMinor, calculatedAt}`
+  payload. When no active rate plan applies the provider raises the
+  stable `PRICING_NOT_CONFIGURED` conflict and the quote keeps
+  `pricing: null` — an unpriced quote is valid but never
+  bookable-as-priced.
+- **Booking snapshots (06-D07/D08)**: confirmation stores the quote's
+  authoritative calculation into `booking_price_snapshots` — one
+  immutable row per booking (unique index), captured once, never
+  rewritten by later configuration changes or replays.
+- **Determinism (06-D09)**: concurrent identical quotes return
+  identical totals; replaying a confirmation never duplicates the
+  snapshot.
+
+R1 boundaries: walk-in/import bookings (no quote) price at the
+invoicing flows (phase 09) — their snapshot slots are pre-wired;
+distance is straight-line haversine between branch coordinates until
+delivery-zone polygons land with 02-C08.
 
 ## Definition of done
 

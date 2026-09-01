@@ -39,6 +39,7 @@ export const EXTRA_TYPES = [
   'OTHER',
 ] as const;
 export const EXTRA_PRICING_UNITS = ['PER_BOOKING', 'PER_DAY', 'PER_RENTAL_UNIT'] as const;
+export type ExtraPricingUnitValue = (typeof EXTRA_PRICING_UNITS)[number];
 
 export const MAX_DISCOUNT_MINOR = 1_000_000_000;
 export const MAX_DISCOUNT_BASIS_POINTS = 1_000_000;

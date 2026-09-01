@@ -89,7 +89,13 @@ export type QuoteAvailability =
 export interface QuotePricingPayload {
   currency: string;
   totalMinor: number;
+  /** Itemized signed components of the total (integer minor units). */
   breakdown: Array<{ code: string; amountMinor: number }>;
+  /**
+   * Deposit requirement tracked separately from the total
+   * (06-C08/06-D06); null when no deposit policy applies.
+   */
+  depositMinor: number | null;
   calculatedAt: string;
 }
 

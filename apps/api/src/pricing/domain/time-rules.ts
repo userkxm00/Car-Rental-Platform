@@ -96,8 +96,9 @@ export interface TimeAdjustmentLine {
 
 /**
  * Rounds a minor amount to `precision` minor units, halves away from
- * zero — centralized (06-D02); currencies with 2-decimal minors (DZD,
- * EUR, USD, MAD, TND) share precision 100.
+ * zero — centralized (06-D02). Currencies with 2-decimal minors (DZD,
+ * EUR, USD, MAD) share precision 100; TND (3 decimals) uses 1000 —
+ * see `pricing/domain/money.ts` (06-D04).
  */
 export function roundMinorToPrecision(amountMinor: number, precision: number): number {
   const sign = amountMinor < 0 ? -1 : 1;

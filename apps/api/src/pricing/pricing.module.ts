@@ -3,12 +3,14 @@ import { AuthorizationModule } from '../authorization/authorization.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AvailabilityModule } from '../availability/availability.module';
 import { LocationsModule } from '../locations/locations.module';
+import { QUOTE_PRICING_PORT } from '../quotes/application/ports/quote-pricing.port';
 import { RatePlansService } from './application/rate-plans.service';
 import { RatePlansRepository } from './infrastructure/rate-plans.repository';
 import { RatePlansController } from './presentation/rate-plans.controller';
 import { CommercialService } from './application/commercial.service';
 import { CommercialRepository } from './infrastructure/commercial.repository';
 import { CommercialController } from './presentation/commercial.controller';
+import { QuotePricingProvider } from './application/quote-pricing.provider';
 
 /**
  * PHASE-06 pricing engine — 06-A: the rate model (plans, currency, effective
@@ -16,13 +18,22 @@ import { CommercialController } from './presentation/commercial.controller';
  * precedence) and its administration API (06-A07). 06-B: time rules (peak
  * windows, location hours). 06-C: commercial adjustments (promotions,
  * coupons, extras catalog, fee rules, deposit policies) with their
- * administration API. The financial-truth calculator with snapshots (06-D)
- * extends this module; the quote pricing port is registered once the engine
- * can compute (06-D).
+ * administration API. 06-D: financial truth — the engine computes
+ * authoritative quotes through {@link QUOTE_PRICING_PORT} and confirmed
+ * bookings snapshot the result.
  */
 @Module({
   imports: [IdentityModule, AuthorizationModule, AvailabilityModule, LocationsModule],
   controllers: [RatePlansController, CommercialController],
-  providers: [RatePlansService, RatePlansRepository, CommercialService, CommercialRepository],
+  providers: [
+    RatePlansService,
+    RatePlansRepository,
+    CommercialService,
+    CommercialRepository,
+    QuotePricingProvider,
+    { provide: QUOTE_PRICING_PORT, useClass: QuotePricingProvider },
+  ],
+  // The quote flow (QuotesModule) consumes the engine through this port.
+  exports: [QUOTE_PRICING_PORT],
 })
 export class PricingModule {}

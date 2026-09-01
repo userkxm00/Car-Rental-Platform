@@ -16,6 +16,13 @@ import type { QuotePricingPayload } from '../../domain/quote-contract';
  */
 export const QUOTE_PRICING_PORT = Symbol('KAVRIQO_QUOTE_PRICING_PORT');
 
+/**
+ * Stable business code thrown by a registered provider when no active
+ * rate plan applies to the quote target. The quote flow maps it back to
+ * `pricing: null` (an unpriced quote is valid but never bookable-as-priced).
+ */
+export const QUOTE_PRICING_NOT_CONFIGURED_CODE = 'PRICING_NOT_CONFIGURED';
+
 export interface QuotePricingInput {
   tenantId: string;
   mode: 'VEHICLE' | 'CATEGORY';

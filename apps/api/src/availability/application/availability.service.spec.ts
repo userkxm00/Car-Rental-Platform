@@ -255,6 +255,7 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
   });
 
   it('flags a live block and a live hold that overlap as conflicting on both sides (04-D03)', async () => {
+    const now = Date.now();
     const repo = makeRepository({
       scheduleCommitments: jest.fn().mockResolvedValue([
         {
@@ -269,8 +270,8 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
               kind: 'BLOCK',
               blockType: 'MANUAL',
               status: 'ACTIVE',
-              start: new Date('2026-09-01T08:00:00Z'),
-              end: new Date('2026-09-01T12:00:00Z'),
+              start: new Date(now + 3_600_000),
+              end: new Date(now + 4 * 3_600_000),
               reason: null,
             },
             {
@@ -278,8 +279,8 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
               kind: 'HOLD',
               blockType: null,
               status: 'ACTIVE',
-              start: new Date('2026-09-01T10:00:00Z'),
-              end: new Date('2026-09-01T14:00:00Z'),
+              start: new Date(now + 2 * 3_600_000),
+              end: new Date(now + 3 * 3_600_000),
               reason: null,
             },
           ],
@@ -296,7 +297,7 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
   });
 
   it('does not flag conflicts against expired holds or cancelled blocks', async () => {
-    const past = new Date(Date.now() - 60_000);
+    const now = Date.now();
     const repo = makeRepository({
       scheduleCommitments: jest.fn().mockResolvedValue([
         {
@@ -311,8 +312,8 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
               kind: 'BLOCK',
               blockType: 'MANUAL',
               status: 'ACTIVE',
-              start: new Date('2026-09-01T08:00:00Z'),
-              end: new Date('2026-09-01T12:00:00Z'),
+              start: new Date(now + 3_600_000),
+              end: new Date(now + 2 * 3_600_000),
               reason: null,
             },
             {
@@ -320,8 +321,8 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
               kind: 'HOLD',
               blockType: null,
               status: 'ACTIVE',
-              start: new Date('2026-09-01T10:00:00Z'),
-              end: past,
+              start: new Date(now - 3 * 3_600_000),
+              end: new Date(now - 2 * 3_600_000),
               reason: null,
             },
             {
@@ -329,8 +330,8 @@ describe('AvailabilityService.scheduleTimeline (04-D01…D05)', () => {
               kind: 'BLOCK',
               blockType: 'MAINTENANCE',
               status: 'CANCELLED',
-              start: new Date('2026-09-01T08:00:00Z'),
-              end: new Date('2026-09-01T13:00:00Z'),
+              start: new Date(now + 3_600_000),
+              end: new Date(now + 3 * 3_600_000),
               reason: null,
             },
           ],

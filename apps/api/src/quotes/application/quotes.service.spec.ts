@@ -5,7 +5,10 @@ import type { AvailabilityRepository } from '../../availability/infrastructure/a
 import type { LocationContextService } from '../../availability/application/location-context.service';
 import { QuotesService } from './quotes.service';
 import type { QuotesRepository, QuoteRecordRow } from '../infrastructure/quotes.repository';
-import type { QuotePricingPort } from './ports/quote-pricing.port';
+import {
+  QUOTE_PRICING_NOT_CONFIGURED_CODE,
+  type QuotePricingPort,
+} from './ports/quote-pricing.port';
 import { QuoteErrorCode } from '../domain/quote-contract';
 
 /**
@@ -237,6 +240,7 @@ describe('QuotesService.createQuote (05-A03/A04/A05)', () => {
         currency: 'DZD',
         totalMinor: 120000,
         breakdown: [{ code: 'BASE_RATE', amountMinor: 120000 }],
+        depositMinor: null,
         calculatedAt: '2026-09-01T00:00:00.000Z',
       }),
     };
@@ -254,6 +258,48 @@ describe('QuotesService.createQuote (05-A03/A04/A05)', () => {
     expect(result.pricing).toMatchObject({ currency: 'DZD', totalMinor: 120000 });
     expect(pricing.computeQuotePricing).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'ag1', mode: 'VEHICLE' }),
+    );
+  });
+
+  it('keeps pricing null when the engine reports no pricing configuration (06-D06)', async () => {
+    const pricing: QuotePricingPort = {
+      computeQuotePricing: jest.fn().mockRejectedValue(
+        new ConflictException({
+          code: QUOTE_PRICING_NOT_CONFIGURED_CODE,
+          message: 'No active rate plan applies to this quote.',
+        }),
+      ),
+    };
+    const { service } = makeService({
+      pricing,
+      availabilityRepository: {
+        findVehicleInTenant: jest
+          .fn()
+          .mockResolvedValue({ id: 'v1', status: 'AVAILABLE', currentBranchId: null }),
+      },
+    });
+
+    const result = await service.createQuote('ag1', 'u1', vehicleRequest());
+    expect(result.pricing).toBeNull();
+  });
+
+  it('propagates non-pricing engine errors (06-D06)', async () => {
+    const pricing: QuotePricingPort = {
+      computeQuotePricing: jest
+        .fn()
+        .mockRejectedValue(new Error('engine exploded')),
+    };
+    const { service } = makeService({
+      pricing,
+      availabilityRepository: {
+        findVehicleInTenant: jest
+          .fn()
+          .mockResolvedValue({ id: 'v1', status: 'AVAILABLE', currentBranchId: null }),
+      },
+    });
+
+    await expect(service.createQuote('ag1', 'u1', vehicleRequest())).rejects.toThrow(
+      'engine exploded',
     );
   });
 
