@@ -6,15 +6,15 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-06`
-- Current workstream: `06-A Rate Model`
-- Current task: `06-A01` (rate plan schema — see WBS)
-- Last completed task: `05-D12` (Phase 05 gate — 05-D Lifecycle Operations COMPLETE)
+- Current workstream: `06-B Time Rules`
+- Current task: `06-B01` (hourly pricing — see WBS)
+- Last completed task: `06-A07` (rate administration API — 06-A Rate Model COMPLETE)
 - Last completed phase: `PHASE-05 Booking Engine`
 - Current attempt: `1`
-- Last validation: PHASE-05 gate after 05-D — build 0 → typecheck 0 → unit 287 (api 269, api-client 5, config 13) → e2e 159 (20 suites incl. booking-lifecycle); lint: production code 0, 51 remaining spec errors are the established `expect(mock.method)` idiom in the quotes (32) and bookings (19) specs — 2026-08-31
-- Last known good commit: `c6962d1` on `arena/01a05097-car-rental-platform` (pushed to origin 2026-08-31)
-- Blocker: none
-- Next action: execute PHASE-06 workstream 06-A Rate Model (rate plan schema, currency handling, effective dates, vehicle/category applicability, duration units, rule precedence, rate administration API)
+- Last validation: after 06-A — build 0 → typecheck 0 → unit 282 (api, 28 suites) → e2e 164 (21 suites incl. rate-plans); lint: pricing production code 0, remaining spec errors are the established `expect(mock.method)` idiom — 2026-08-31
+- Last known good commit: `d4cda44` on `arena/01a05097-car-rental-platform` (committed locally; push pending — GitHub token expired, user reconnection needed)
+- Blocker: GitHub token expired (gh + git auth failing since the 06-A push) — `26c3196`/`d4cda44` are committed locally and safe; reconnect GitHub in Arena to push
+- Next action: execute PHASE-06 workstream 06-B Time Rules (hourly/daily/weekly/monthly pricing, duration tiers, seasonal pricing, special-date pricing, weekend/holiday rules)
 - Last updated: 2026-08-31
 
 ## Canonical execution model
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-06 / 06-A / 06-A01`
+`PHASE-06 / 06-B / 06-B01`
 
 ## Phase 05 result (Booking Engine)
 

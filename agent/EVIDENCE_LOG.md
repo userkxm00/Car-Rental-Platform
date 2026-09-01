@@ -501,3 +501,17 @@ Append one checkpoint per completed task or phase gate.
 ## Phase result
 
 `PHASE-05 — Booking Engine` — **GATE PASSED** (05-A Quote/Request, 05-B Booking Aggregate, 05-C State Machine, 05-D Lifecycle Operations; lifecycle/concurrency/idempotency/authorization/audit tests green; build/typecheck clean; evidence recorded). Next: PHASE-06 Pricing Engine (06-A Rate Model).
+
+## Checkpoint: 06-A — Rate Model
+
+- Task: `PHASE-06 / 06-A / 06-A01…A07`
+- Status: `DONE`
+- Date: `2026-08-31`
+- Summary: Pricing configuration layer (`apps/api/src/pricing/`), migration `20260831030000_rate_plans` (13 applied). Schema (06-A01): `rate_plans` (tenant FK cascade, unique `[tenantId, code]`, name, currency default DZD, `RateDurationUnit` enum, integer `baseRateMinor`, `precedence`, half-open window `effectiveFrom`/`effectiveUntil?`, `active`) + `rate_plan_scopes` (06-A04: one vehicle OR one category per row, tenant-owned targets; no scopes = tenant-global). Currency (06-A02): config accepts DZD/EUR/USD/MAD/TND; DZD is the R1 calculation currency (06-D03); money is integer minor units only. Effective dates (06-A03): windows validated (`until > from`), overlaps allowed and resolved deterministically. Duration units (06-A05): HOURLY/DAILY/WEEKLY/BIWEEKLY/MONTHLY. Precedence (06-A06): `rate-plan-selection.ts` — total order (scope specificity VEHICLE>CATEGORY>GLOBAL, precedence desc, effectiveFrom desc, createdAt asc, id asc) + half-open effective predicate + `selectEffectiveRatePlan`; the 06-B calculator consumes this one pure function. Admin API (06-A07): POST/GET/PATCH under `pricing.read`/`pricing.manage` (FINANCE reads only); boundary matrix (code/name/currency/unit/integer-rate/precedence/window/scope) with stable 409 codes; P2002 → RATE_PLAN_CODE_TAKEN; PATCH merge semantics with scope replacement and `active:false` deactivation (no hard delete — price history reconstructible). The `QUOTE_PRICING_PORT` provider stays unregistered until 06-D; quotes remain `pricing: null`.
+- Verification: unit 13 (selection ordering/window/selector; service validation matrix, tenant scope-target checks, P2002 mapping, PATCH merge + deactivation) and e2e `rate-plans` (5: CRUD, unique code + boundary 409s, scope target validation, PATCH semantics, tenant isolation + FINANCE read-only). Full regression: typecheck 0, build 0, unit 282 (28 suites), e2e 164 (21 suites). Lint: pricing production code 0; 3 remaining spec errors are the repository's established `expect(mock.method)` idiom.
+- Commit: `2ce3416`
+- Note: between sessions the user pushed a docs-only canonical-start-prompt root (`e534d20`) to `main`; the sandbox re-clone was reconciled onto the original arena history and 06-A recommitted as `2ce3416` (local restore tag `restore-0dfc8fa`).
+
+## Phase 06 progress
+
+06-A complete. Next: 06-B Time Rules (hourly/daily/weekly/monthly pricing, duration tiers, seasonal/special-date/weekend rules).
