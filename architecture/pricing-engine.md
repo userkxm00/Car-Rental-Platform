@@ -155,6 +155,39 @@ Deposit (separate)
 
 Avoid hidden charges that appear only after confirmation unless required by unavoidable provider/legal rules.
 
+## Implemented (06-A — rate model)
+
+The rate model (`apps/api/src/pricing/`) landed with 06-A:
+
+- **Rate plan schema (06-A01)**: `rate_plans` (tenant, unique `code`,
+  name, currency, duration unit, integer-minor base rate, precedence,
+  half-open effective window, active flag) + `rate_plan_scopes`
+  (06-A04: each scope row targets exactly one tenant-owned vehicle or
+  category; a plan without scopes is tenant-global). Migration
+  `20260831030000_rate_plans`.
+- **Currency (06-A02)**: configuration accepts DZD/EUR/USD/MAD/TND;
+  DZD is the R1 calculation currency (06-D03). Money is integer minor
+  units — `baseRateMinor` never floating point.
+- **Effective dates (06-A03)**: `[effectiveFrom, effectiveUntil)` windows;
+  overlapping windows are allowed and resolved deterministically (below).
+- **Duration units (06-A05)**: HOURLY/DAILY/WEEKLY/BIWEEKLY/MONTHLY per
+  plan; tiers and mixed-duration combination rules land with 06-B.
+- **Precedence (06-A06)**: `pricing/domain/rate-plan-selection.ts` defines
+  the total order — scope specificity (vehicle > category > global),
+  precedence desc, effectiveFrom desc, createdAt asc, id asc — so
+  candidate sets are never ambiguous; the 06-B calculator consumes this
+  single pure function.
+- **Administration API (06-A07)**: `POST/GET/PATCH
+  /api/v1/agencies/:agencyId/pricing/rate-plans` with `pricing.read` /
+  `pricing.manage` (FINANCE reads only). Deactivation is a PATCH — plans
+  are never hard-deleted, so price history stays reconstructible. Scopes
+  are validated against tenant-owned vehicles/categories server-side.
+
+The `QUOTE_PRICING_PORT` provider is still unregistered (quotes remain
+`pricing: null` and not bookable-as-priced) until the engine can compute:
+time rules (06-B) → adjustments (06-C) → financial truth + snapshots
+(06-D).
+
 ## Definition of done
 
 - deterministic calculations

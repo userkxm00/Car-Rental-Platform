@@ -110,6 +110,7 @@ model Tenant {
   bookings          Booking[]
   bookingCounter    BookingCounter?
   idempotencyRecords BookingIdempotencyRecord[]
+  ratePlans         RatePlan[]
 
   @@map("tenants")
 }
@@ -305,6 +306,7 @@ model VehicleCategory {
   bookingHolds     BookingHold[]
   quoteRecords     QuoteRecord[]
   bookingsRequested Booking[]        @relation("BookingRequestedCategory")
+  ratePlanScopes   RatePlanScope[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -349,6 +351,7 @@ model Vehicle {
   holds           BookingHold[]
   quoteRecords    QuoteRecord[]
   bookingsAssigned Booking[]         @relation("BookingAssignedVehicle")
+  ratePlanScopes  RatePlanScope[]
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
@@ -658,6 +661,62 @@ model BookingIdempotencyRecord {
 
   @@unique([tenantId, actorUserId, command, idempotencyKey])
   @@map("booking_idempotency_records")
+}
+
+/// PHASE-06 / 06-A05: duration units a rate plan is expressed in. Tiers and
+/// mixed-duration combination rules land with 06-B.
+enum RateDurationUnit {
+  HOURLY
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+/// PHASE-06 / 06-A01: tenant rate plan. Money is always an integer minor
+/// amount (`baseRateMinor`) — never floating point (architecture/
+/// pricing-engine.md; the exact-money library is 06-D01).
+model RatePlan {
+  id             String           @id @default(uuid()) @db.Uuid
+  tenantId       String           @db.Uuid
+  code           String
+  name           String
+  currency       String           @default("DZD")
+  durationUnit   RateDurationUnit
+  baseRateMinor  Int
+  /// 06-A06: higher wins within the same scope specificity; the remaining
+  /// deterministic ordering is defined in the pricing domain.
+  precedence     Int              @default(0)
+  effectiveFrom  DateTime
+  effectiveUntil DateTime?
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopes RatePlanScope[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+  @@map("rate_plans")
+}
+
+/// PHASE-06 / 06-A04: applicability — a plan with no scopes applies
+/// tenant-wide; each scope targets exactly one vehicle or one category.
+model RatePlanScope {
+  id         String   @id @default(uuid()) @db.Uuid
+  ratePlanId String   @db.Uuid
+  vehicleId  String?  @db.Uuid
+  categoryId String?  @db.Uuid
+  createdAt  DateTime @default(now())
+
+  ratePlan RatePlan         @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([categoryId])
+  @@map("rate_plan_scopes")
 }
 
 enum VehicleStatus {
