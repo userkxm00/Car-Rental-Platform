@@ -19,6 +19,12 @@ export const RatePlanErrorCode = {
   RATE_PLAN_WINDOW_INVALID: 'RATE_PLAN_WINDOW_INVALID',
   RATE_PLAN_SCOPE_INVALID: 'RATE_PLAN_SCOPE_INVALID',
   RATE_PLAN_SCOPE_EXCESSIVE: 'RATE_PLAN_SCOPE_EXCESSIVE',
+  RATE_PLAN_TIER_INVALID: 'RATE_PLAN_TIER_INVALID',
+  RATE_PLAN_TIER_ORDER_INVALID: 'RATE_PLAN_TIER_ORDER_INVALID',
+  RATE_PLAN_TIER_DUPLICATE: 'RATE_PLAN_TIER_DUPLICATE',
+  RATE_PLAN_ADJUSTMENT_INVALID: 'RATE_PLAN_ADJUSTMENT_INVALID',
+  RATE_PLAN_ADJUSTMENT_WINDOW_INVALID: 'RATE_PLAN_ADJUSTMENT_WINDOW_INVALID',
+  RATE_PLAN_ADJUSTMENT_DUPLICATE: 'RATE_PLAN_ADJUSTMENT_DUPLICATE',
   VEHICLE_NOT_FOUND: 'VEHICLE_NOT_FOUND',
   CATEGORY_NOT_FOUND: 'CATEGORY_NOT_FOUND',
   CATEGORY_INACTIVE: 'CATEGORY_INACTIVE',
@@ -52,6 +58,24 @@ export interface RatePlanScopeInput {
   categoryId?: string;
 }
 
+/** 06-B05: duration ladder step — `upToUnits` null marks the open tier. */
+export interface RatePlanTierInput {
+  upToUnits?: number | null;
+  rateMinor?: number;
+}
+
+/** 06-B06..B08: a time adjustment (kind-specific fields are validated). */
+export interface RatePlanAdjustmentInput {
+  kind?: string;
+  adjustmentType?: string;
+  windowStart?: string | null;
+  windowEnd?: string | null;
+  date?: string | null;
+  daysOfWeek?: number[];
+  valueMinor?: number;
+  precedence?: number;
+}
+
 /** Raw admin input — validated at the boundary, never trusted. */
 export interface RatePlanRequestInput {
   code?: string;
@@ -64,11 +88,29 @@ export interface RatePlanRequestInput {
   effectiveUntil?: string | null;
   active?: boolean;
   scopes?: RatePlanScopeInput[];
+  tiers?: RatePlanTierInput[];
+  adjustments?: RatePlanAdjustmentInput[];
 }
 
 export interface RatePlanScopeResponse {
   vehicleId: string | null;
   categoryId: string | null;
+}
+
+export interface RatePlanTierResponse {
+  upToUnits: number | null;
+  rateMinor: number;
+}
+
+export interface RatePlanAdjustmentResponse {
+  kind: string;
+  adjustmentType: string;
+  windowStart: string | null;
+  windowEnd: string | null;
+  date: string | null;
+  daysOfWeek: number[];
+  valueMinor: number;
+  precedence: number;
 }
 
 export interface RatePlanResponse {
@@ -83,6 +125,8 @@ export interface RatePlanResponse {
   effectiveUntil: string | null;
   active: boolean;
   scopes: RatePlanScopeResponse[];
+  tiers: RatePlanTierResponse[];
+  adjustments: RatePlanAdjustmentResponse[];
   createdAt: string;
   updatedAt: string;
 }

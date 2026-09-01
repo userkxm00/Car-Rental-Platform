@@ -695,6 +695,8 @@ model RatePlan {
 
   tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   scopes RatePlanScope[]
+  tiers  RatePlanTier[]
+  adjustments RatePlanAdjustment[]
 
   @@unique([tenantId, code])
   @@index([tenantId, active])
@@ -717,6 +719,61 @@ model RatePlanScope {
   @@index([vehicleId])
   @@index([categoryId])
   @@map("rate_plan_scopes")
+}
+
+/// PHASE-06 / 06-B05: duration ladder within a plan — unit index `i` is
+/// priced by the tier with the smallest `upToUnits >= i` (the open tier
+/// with `upToUnits = null` covers the rest; absent tiers = `baseRateMinor`).
+model RatePlanTier {
+  id         String  @id @default(uuid()) @db.Uuid
+  ratePlanId String  @db.Uuid
+  upToUnits  Int?
+  rateMinor  Int
+  createdAt  DateTime @default(now())
+
+  ratePlan RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+
+  @@index([ratePlanId])
+  @@map("rate_plan_tiers")
+}
+
+/// PHASE-06 / 06-B06..B08: time rules — SEASONAL windows, SPECIAL_DATE /
+/// HOLIDAY calendar dates, WEEKEND day-of-week sets (0=Sunday..6=Saturday).
+/// PERCENT values are basis points (1500 = +15%); FLAT_PER_UNIT adds a
+/// minor amount per started unit. `precedence` is unique per plan+kind, so
+/// the matching rule is deterministic by constraint.
+model RatePlanAdjustment {
+  id             String              @id @default(uuid()) @db.Uuid
+  ratePlanId     String              @db.Uuid
+  kind           RateAdjustmentKind
+  adjustmentType RateAdjustmentType
+  windowStart    DateTime?
+  windowEnd      DateTime?
+  date           DateTime?           @db.Date
+  daysOfWeek     Int[]
+  valueMinor     Int
+  precedence     Int
+  createdAt      DateTime            @default(now())
+
+  ratePlan RatePlan @relation(fields: [ratePlanId], references: [id], onDelete: Cascade)
+
+  @@unique([ratePlanId, kind, precedence])
+  @@index([ratePlanId])
+  @@map("rate_plan_adjustments")
+}
+
+/// 06-B06..B08 rule kinds; the stage order SEASONAL → WEEKEND → HOLIDAY →
+/// SPECIAL_DATE is fixed in the pricing domain.
+enum RateAdjustmentKind {
+  SEASONAL
+  SPECIAL_DATE
+  WEEKEND
+  HOLIDAY
+}
+
+enum RateAdjustmentType {
+  PERCENT
+  FLAT_PER_UNIT
 }
 
 enum VehicleStatus {

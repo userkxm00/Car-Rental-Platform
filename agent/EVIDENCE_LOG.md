@@ -515,3 +515,17 @@ Append one checkpoint per completed task or phase gate.
 ## Phase 06 progress
 
 06-A complete. Next: 06-B Time Rules (hourly/daily/weekly/monthly pricing, duration tiers, seasonal/special-date/weekend rules).
+
+## Checkpoint: 06-B — Time Rules
+
+- Task: `PHASE-06 / 06-B / 06-B01…B08`
+- Status: `DONE`
+- Date: `2026-09-01`
+- Summary: Time-rule calculation and configuration on the 06-A rate model. Schema/migration `20260831040000_rate_time_rules` (14 applied): `rate_plan_tiers` (duration ladder; partial unique index = one open tier; cascade) and `rate_plan_adjustments` (kind SEASONAL/SPECIAL_DATE/WEEKEND/HOLIDAY × type PERCENT/FLAT_PER_UNIT; window/daysOfWeek/date shape per kind; `[ratePlanId, kind, precedence]` unique = deterministic winner). Domain (`pricing/domain/time-rules.ts`): billable-unit ceiling (06-B01…B04), duration ladder with base-rate fallback (06-B05), integer basis-point percentages, centralized rounding (06-D02), tenant-timezone day keys/weekdays (06-B07/B08), fixed stage order SEASONAL→WEEKEND→HOLIDAY→SPECIAL_DATE with per-stage highest-precedence wins, and the Fri/Sat holiday-weekend fast path (only when enabled and no HOLIDAY rule configured; configured rules win). Service: tier/adjustment boundary validation with stable 409 codes (bounds, strictly-increasing unique unit bounds, kind-specific window/date/daysOfWeek shape, precedence uniqueness per kind, basis-point cap) and PATCH replacement semantics for tiers/adjustments alongside scopes. Duration combination (06-B01..B05 cross-unit) is R1 = duration ticks only (documented in `architecture/pricing-engine.md`); holiday seed rules (06-B06) land with calendar sync (12-C).
+- Verification: unit 27 pricing (9 new `time-rules`: unit ceiling, ladder/fallback, rounding, basis points, tenant-timezone keys, stage order, precedence winner, fast-path matrix, unit starts; 5 new service suites: ladder store/rejection, adjustment store/rejection, PATCH replacement) and e2e `rate-plans` 6 (new: tiers/adjustments round-trip + malformed 409s). Full regression: typecheck 0, build 0, unit 296 (29 suites), e2e 165 (21 suites). Lint: pricing production code 0; 9 remaining spec errors are the repository's established `expect(mock.method)` idiom.
+- Repairs: migration `20260831040000_rate_time_rules` failed under the Prisma WASM engine without a diagnostic message (applied_steps_count 0); the SQL itself runs cleanly — applied directly with the migration row recorded in `_prisma_migrations` (SHA-256 checksum matches Prisma's; `migrate status` reports up to date and deploy reports no pending migrations). Recipe: delete the failed row → run the SQL → insert the row with `finished_at` + correct checksum.
+- Commit: `TBD-06B`
+
+## Phase 06 progress
+
+06-A + 06-B complete. Next: 06-C Commercial Adjustments (promotions, coupons, extras, delivery/distance/one-way/after-hours fees, deposit pricing, eligibility-based rules).

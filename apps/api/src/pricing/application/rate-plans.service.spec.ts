@@ -43,6 +43,8 @@ function planRow(overrides: Partial<RatePlanRow> = {}): RatePlanRow {
     createdAt: new Date('2026-08-01T00:00:00Z'),
     updatedAt: new Date('2026-08-01T00:00:00Z'),
     scopes: [],
+    tiers: [],
+    adjustments: [],
     ...overrides,
   };
 }
@@ -52,8 +54,22 @@ function makeService(options: {
   availabilityRepository?: Partial<AvailabilityRepository>;
 } = {}) {
   const repository = {
-    create: jest.fn((input: { code: string; scopes: RatePlanRow['scopes'] }) =>
-       Promise.resolve(planRow({ code: input.code, scopes: input.scopes }))),
+    create: jest.fn(
+      (input: {
+        code: string;
+        scopes: RatePlanRow['scopes'];
+        tiers: RatePlanRow['tiers'];
+        adjustments: RatePlanRow['adjustments'];
+      }) =>
+        Promise.resolve(
+          planRow({
+            code: input.code,
+            scopes: input.scopes,
+            tiers: input.tiers,
+            adjustments: input.adjustments,
+          }),
+        ),
+    ),
     findInTenant: jest.fn(() =>  Promise.resolve(planRow())),
     listInTenant: jest.fn(() =>  Promise.resolve([planRow()])),
     listActiveCandidates: jest.fn(() =>  Promise.resolve([planRow()])),
@@ -95,7 +111,7 @@ describe('RatePlansService (06-A01…A07)', () => {
       { vehicleId: 'v1', categoryId: null },
       { vehicleId: null, categoryId: 'c1' },
     ]);
-    expect(repository.create).toHaveBeenCalledWith(
+    expect(repository.create as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'ag1', code: 'BASE', currency: 'DZD' }),
     );
   });
@@ -196,7 +212,7 @@ describe('RatePlansService (06-A01…A07)', () => {
       repository: { findInTenant: jest.fn(() =>  Promise.resolve(current)) },
     });
     await service.updateRatePlan('ag1', 'p1', { active: false, effectiveUntil: null });
-    expect(repository.update).toHaveBeenCalledWith(
+    expect(repository.update as jest.Mock).toHaveBeenCalledWith(
       'ag1',
       'p1',
       expect.objectContaining({
@@ -207,6 +223,8 @@ describe('RatePlansService (06-A01…A07)', () => {
         baseRateMinor: 5000,
       }),
       undefined,
+      undefined,
+      undefined,
     );
 
     const { repository: repo2, service: service2 } = makeService({
@@ -216,11 +234,13 @@ describe('RatePlansService (06-A01…A07)', () => {
       },
     });
     await service2.updateRatePlan('ag1', 'p1', { scopes: [{ vehicleId: 'v2' }] });
-    expect(repo2.update).toHaveBeenCalledWith(
+    expect(repo2.update as jest.Mock).toHaveBeenCalledWith(
       'ag1',
       'p1',
       expect.anything(),
       [{ vehicleId: 'v2', categoryId: null }],
+      undefined,
+      undefined,
     );
   });
 
@@ -229,5 +249,172 @@ describe('RatePlansService (06-A01…A07)', () => {
     await expect(
       service.updateRatePlan('ag1', 'p1', { effectiveUntil: '2026-07-01T00:00:00Z' }),
     ).rejects.toMatchObject({ response: { code: 'RATE_PLAN_WINDOW_INVALID' } });
+  });
+});
+
+describe('RatePlansService time rules (06-B05…B08)', () => {
+  it('stores a validated duration ladder', async () => {
+    const { repository, service } = makeService();
+    const result = await service.createRatePlan('ag1', {
+      ...validInput(),
+      tiers: [
+        { upToUnits: 3, rateMinor: 4200 },
+        { upToUnits: null, rateMinor: 3600 },
+      ],
+    });
+    expect(result.tiers).toEqual([
+      { upToUnits: 3, rateMinor: 4200 },
+      { upToUnits: null, rateMinor: 3600 },
+    ]);
+    expect(repository.create as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({ tiers: expect.any(Array) }),
+    );
+  });
+
+  it('rejects malformed tiers with stable codes', async () => {
+    const { service } = makeService();
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [{ ...validInput(), tiers: [{ upToUnits: 10001, rateMinor: 100 }] }, 'RATE_PLAN_TIER_INVALID'],
+      [{ ...validInput(), tiers: [{ upToUnits: 1, rateMinor: 100 }] }, 'RATE_PLAN_TIER_INVALID'],
+      [{ ...validInput(), tiers: [{ upToUnits: 2.5, rateMinor: 100 }] }, 'RATE_PLAN_TIER_INVALID'],
+      [{ ...validInput(), tiers: [{ upToUnits: 5, rateMinor: -1 }] }, 'RATE_PLAN_TIER_INVALID'],
+      [
+        { ...validInput(), tiers: [{ upToUnits: 5, rateMinor: 100 }, { upToUnits: 5, rateMinor: 200 }] },
+        'RATE_PLAN_TIER_DUPLICATE',
+      ],
+      [
+        { ...validInput(), tiers: [{ upToUnits: 5, rateMinor: 100 }, { upToUnits: 3, rateMinor: 200 }] },
+        'RATE_PLAN_TIER_ORDER_INVALID',
+      ],
+    ];
+    for (const [input, code] of cases) {
+      await expect(service.createRatePlan('ag1', input as never)).rejects.toMatchObject({
+        response: { code },
+      });
+    }
+  });
+
+  it('stores validated time adjustments (seasonal, weekend, holiday, special date)', async () => {
+    const { repository, service } = makeService();
+    const result = await service.createRatePlan('ag1', {
+      ...validInput(),
+      adjustments: [
+        {
+          kind: 'SEASONAL',
+          adjustmentType: 'PERCENT',
+          windowStart: '2026-08-01T00:00:00Z',
+          windowEnd: '2026-09-01T00:00:00Z',
+          valueMinor: 2000,
+          precedence: 1,
+        },
+        {
+          kind: 'WEEKEND',
+          adjustmentType: 'FLAT_PER_UNIT',
+          daysOfWeek: [5, 6],
+          valueMinor: 300,
+          precedence: 1,
+        },
+        {
+          kind: 'HOLIDAY',
+          adjustmentType: 'FLAT_PER_UNIT',
+          date: '2026-11-01',
+          valueMinor: 500,
+          precedence: 1,
+        },
+        {
+          kind: 'SPECIAL_DATE',
+          adjustmentType: 'PERCENT',
+          date: '2026-11-01',
+          valueMinor: 1500,
+          precedence: 1,
+        },
+      ],
+    });
+    expect(result.adjustments).toHaveLength(4);
+    expect(repository.create as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adjustments: expect.arrayContaining([
+          expect.objectContaining({ kind: 'WEEKEND', daysOfWeek: [5, 6] }),
+        ]),
+      }),
+    );
+  });
+
+  it('rejects malformed adjustments with stable codes', async () => {
+    const { service } = makeService();
+    const cases: Array<[Record<string, unknown>, string]> = [
+      [
+        { ...validInput(), adjustments: [{ kind: 'FULLMOON', adjustmentType: 'PERCENT', valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [5], valueMinor: 100, precedence: -1 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'SEASONAL', adjustmentType: 'PERCENT', valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_WINDOW_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'SEASONAL', adjustmentType: 'PERCENT', windowStart: '2026-09-01T00:00:00Z', windowEnd: '2026-08-01T00:00:00Z', valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_WINDOW_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [], valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [9], valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'HOLIDAY', adjustmentType: 'FLAT_PER_UNIT', date: '01/11/2026', valueMinor: 100, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [5], valueMinor: 100, precedence: 3 }, { kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [6], valueMinor: 100, precedence: 3 }] },
+        'RATE_PLAN_ADJUSTMENT_DUPLICATE',
+      ],
+      [
+        { ...validInput(), adjustments: [{ kind: 'WEEKEND', adjustmentType: 'PERCENT', daysOfWeek: [5], valueMinor: 100_000_001, precedence: 0 }] },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+    ];
+    for (const [input, code] of cases) {
+      await expect(service.createRatePlan('ag1', input as never)).rejects.toMatchObject({
+        response: { code },
+      });
+    }
+  });
+
+  it('patches tiers/adjustments with replacement semantics', async () => {
+    const current = planRow({
+      tiers: [{ upToUnits: null, rateMinor: 3600 }],
+      adjustments: [],
+    });
+    const { repository, service } = makeService({
+      repository: { findInTenant: jest.fn(() => Promise.resolve(current)) },
+    });
+    await service.updateRatePlan('ag1', 'p1', {
+      tiers: [{ upToUnits: 5, rateMinor: 4000 }],
+    });
+    expect(repository.update as jest.Mock).toHaveBeenCalledWith(
+      'ag1',
+      'p1',
+      expect.anything(),
+      undefined,
+      [{ upToUnits: 5, rateMinor: 4000 }],
+      undefined,
+    );
+    // omitted tiers keep the current ladder
+    await service.updateRatePlan('ag1', 'p1', { baseRateMinor: 7000 });
+    expect(repository.update as jest.Mock).toHaveBeenCalledWith(
+      'ag1',
+      'p1',
+      expect.anything(),
+      undefined,
+      undefined,
+      undefined,
+    );
   });
 });

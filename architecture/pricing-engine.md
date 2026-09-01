@@ -183,6 +183,41 @@ The rate model (`apps/api/src/pricing/`) landed with 06-A:
   are never hard-deleted, so price history stays reconstructible. Scopes
   are validated against tenant-owned vehicles/categories server-side.
 
+## Implemented (06-B — time rules)
+
+On top of the 06-A rate model (`apps/api/src/pricing/`):
+
+- **Duration units & tiers (06-B01…B05)**: the ladder is stored as
+  `rate_plan_tiers` (`upToUnits` ascending, exactly one open tier with
+  `upToUnits = null`, unique bounds — enforced at the application
+  boundary and backed by a partial unique index). Calculation is in
+  `pricing/domain/time-rules.ts`: each full unit of the plan's duration
+  unit is priced by the first covering tier, uncovered units fall back
+  to `baseRateMinor`, partial units bill as one.
+- **Duration combination R1**: combining hourly-over-daily (etc.) units
+  is duration-ticks-only in R1 — the longest unit with a configured
+  tier is used and intra-unit mixes are priced by the shorter unit.
+  Cross-unit tier semantics (hourly top-ups over daily buckets) are a
+  future release refinement.
+- **Time adjustments (06-B06…B08)**: `rate_plan_adjustments` with
+  SEASONAL (half-open windows), WEEKEND (days-of-week sets),
+  HOLIDAY / SPECIAL_DATE (R1: plain calendar days). PERCENT values are
+  basis points; FLAT_PER_UNIT adds a minor amount per started unit.
+  Stages apply in the fixed order SEASONAL → WEEKEND → HOLIDAY →
+  SPECIAL_DATE; within a stage the highest `precedence` wins (unique
+  per plan+kind by constraint). Calendar math runs in the tenant
+  timezone (`Intl`, Africa/Algiers for R1); when a tenant enables the
+  fast path and no HOLIDAY rule is configured, Fri/Sat (Algeria
+  weekend) count as holiday-weekend; configured HOLIDAY rules always
+  win.
+- **Administration (06-B)**: tiers/adjustments travel on the 06-A07
+  POST/PATCH rate-plan endpoints with the same merge/replacement
+  semantics (PATCH `tiers`/`adjustments` replace the child set).
+
+R1 boundaries: holiday **seed rules** (06-B06) land with the calendar
+sync workstream (12-C); seasonal curves, weekend multipliers and
+special-date overrides are configured per plan, never hardcoded.
+
 The `QUOTE_PRICING_PORT` provider is still unregistered (quotes remain
 `pricing: null` and not bookable-as-priced) until the engine can compute:
 time rules (06-B) → adjustments (06-C) → financial truth + snapshots

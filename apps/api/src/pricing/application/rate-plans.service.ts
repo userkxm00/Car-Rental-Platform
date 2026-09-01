@@ -11,14 +11,29 @@ import {
   RATE_PLAN_CODE_PATTERN,
   RatePlanErrorCode,
   SUPPORTED_RATE_CURRENCIES,
+  type RatePlanAdjustmentInput,
   type RatePlanRequestInput,
   type RatePlanResponse,
   type RatePlanScopeInput,
+  type RatePlanTierInput,
 } from '../domain/rate-plan-contract';
 import {
+  MAX_ADJUSTMENT_AMOUNT_MINOR,
+  MAX_ADJUSTMENT_PRECEDENCE,
+  MAX_PERCENT_BASIS_POINTS,
+  MAX_TIERS,
+  MAX_TIER_RATE_MINOR,
+  MAX_TIER_UNITS,
+  MIN_TIER_UNITS,
+  RateAdjustmentKind,
+  RateAdjustmentType,
+} from '../domain/time-rules';
+import {
   RatePlansRepository,
+  type RatePlanAdjustmentRow,
   type RatePlanPatch,
   type RatePlanRow,
+  type RatePlanTierRow,
 } from '../infrastructure/rate-plans.repository';
 
 /**
@@ -45,6 +60,8 @@ export interface ValidatedRatePlan {
   effectiveUntil: Date | null;
   active: boolean;
   scopes: Array<{ vehicleId: string | null; categoryId: string | null }>;
+  tiers: RatePlanTierRow[];
+  adjustments: RatePlanAdjustmentRow[];
 }
 
 @Injectable()
@@ -124,6 +141,20 @@ export class RatePlansService {
           : patch.effectiveUntil,
       active: patch.active ?? current.active,
       scopes: patch.scopes,
+      tiers: patch.tiers ?? current.tiers.map((tier) => ({
+        upToUnits: tier.upToUnits,
+        rateMinor: tier.rateMinor,
+      })),
+      adjustments: patch.adjustments ?? current.adjustments.map((adjustment) => ({
+        kind: adjustment.kind,
+        adjustmentType: adjustment.adjustmentType,
+        windowStart: adjustment.windowStart?.toISOString() ?? null,
+        windowEnd: adjustment.windowEnd?.toISOString() ?? null,
+        date: adjustment.date,
+        daysOfWeek: adjustment.daysOfWeek,
+        valueMinor: adjustment.valueMinor,
+        precedence: adjustment.precedence,
+      })),
     };
     const validated = await this.validateInput(tenantId, merged);
 
@@ -144,6 +175,8 @@ export class RatePlansService {
         ratePlanId,
         repoPatch,
         patch.scopes === undefined ? undefined : validated.scopes,
+        patch.tiers === undefined ? undefined : validated.tiers,
+        patch.adjustments === undefined ? undefined : validated.adjustments,
       );
       if (!row) {
         throw new NotFoundException({
@@ -241,6 +274,8 @@ export class RatePlansService {
     }
 
     const scopes = await this.validateScopes(tenantId, input.scopes ?? []);
+    const tiers = this.validateTiers(input.tiers ?? []);
+    const adjustments = this.validateAdjustments(input.adjustments ?? []);
     return {
       code,
       name,
@@ -252,7 +287,179 @@ export class RatePlansService {
       effectiveUntil,
       active: input.active === undefined ? true : input.active === true,
       scopes,
+      tiers,
+      adjustments,
     };
+  }
+
+  /** 06-B05: strictly increasing, unique, bounded duration ladder. */
+  private validateTiers(tiers: RatePlanTierInput[]): RatePlanTierRow[] {
+    if (tiers.length > MAX_TIERS) {
+      throw new ConflictException({
+        code: RatePlanErrorCode.RATE_PLAN_TIER_INVALID,
+        message: `At most ${MAX_TIERS} tiers per rate plan.`,
+      });
+    }
+    const seen = new Set<number | null>();
+    let previous: number | null = null;
+    const validated: RatePlanTierRow[] = [];
+    for (const tier of tiers) {
+      if (
+        tier.rateMinor === undefined ||
+        !Number.isInteger(tier.rateMinor) ||
+        tier.rateMinor < 0 ||
+        tier.rateMinor > MAX_TIER_RATE_MINOR
+      ) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_TIER_INVALID,
+          message: `tier.rateMinor must be an integer between 0 and ${MAX_TIER_RATE_MINOR}.`,
+        });
+      }
+      const upToUnits =
+        tier.upToUnits === null || tier.upToUnits === undefined
+          ? null
+          : tier.upToUnits;
+      if (
+        upToUnits !== null &&
+        (!Number.isInteger(upToUnits) || upToUnits < MIN_TIER_UNITS || upToUnits > MAX_TIER_UNITS)
+      ) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_TIER_INVALID,
+          message: `tier.upToUnits must be null (open) or an integer in [${MIN_TIER_UNITS}, ${MAX_TIER_UNITS}].`,
+        });
+      }
+      if (seen.has(upToUnits)) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_TIER_DUPLICATE,
+          message: 'Tier unit bounds must be unique.',
+        });
+      }
+      if (previous !== null && upToUnits !== null && upToUnits <= previous) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_TIER_ORDER_INVALID,
+          message: 'Tier unit bounds must be strictly increasing.',
+        });
+      }
+      seen.add(upToUnits);
+      if (upToUnits !== null) {
+        previous = upToUnits;
+      }
+      validated.push({ upToUnits, rateMinor: tier.rateMinor });
+    }
+    return validated;
+  }
+
+  /** 06-B06..B08: kind-specific shape, precedence uniqueness, bounded values. */
+  private validateAdjustments(adjustments: RatePlanAdjustmentInput[]): RatePlanAdjustmentRow[] {
+    const precedenceByKind = new Map<string, Set<number>>();
+    const validated: RatePlanAdjustmentRow[] = [];
+    for (const adjustment of adjustments) {
+      const kind = (adjustment.kind ?? '').toUpperCase();
+      if (!(Object.values(RateAdjustmentKind) as string[]).includes(kind)) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: `adjustment.kind must be one of ${Object.values(RateAdjustmentKind).join(', ')}.`,
+        });
+      }
+      const adjustmentType = (adjustment.adjustmentType ?? '').toUpperCase();
+      if (!(Object.values(RateAdjustmentType) as string[]).includes(adjustmentType)) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: `adjustment.adjustmentType must be one of ${Object.values(RateAdjustmentType).join(', ')}.`,
+        });
+      }
+      if (
+        adjustment.valueMinor === undefined ||
+        !Number.isInteger(adjustment.valueMinor) ||
+        adjustment.valueMinor < 0 ||
+        adjustment.valueMinor > MAX_ADJUSTMENT_AMOUNT_MINOR
+      ) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: `adjustment.valueMinor must be an integer between 0 and ${MAX_ADJUSTMENT_AMOUNT_MINOR}.`,
+        });
+      }
+      if (adjustmentType === 'PERCENT' && adjustment.valueMinor > MAX_PERCENT_BASIS_POINTS) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: `PERCENT valueMinor is basis points (max ${MAX_PERCENT_BASIS_POINTS}).`,
+        });
+      }
+      if (
+        adjustment.precedence === undefined ||
+        !Number.isInteger(adjustment.precedence) ||
+        adjustment.precedence < 0 ||
+        adjustment.precedence > MAX_ADJUSTMENT_PRECEDENCE
+      ) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: `adjustment.precedence must be an integer in [0, ${MAX_ADJUSTMENT_PRECEDENCE}].`,
+        });
+      }
+      const precedences = precedenceByKind.get(kind) ?? new Set<number>();
+      if (precedences.has(adjustment.precedence)) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_DUPLICATE,
+          message: `precedence must be unique per kind (${kind}).`,
+        });
+      }
+      precedences.add(adjustment.precedence);
+      precedenceByKind.set(kind, precedences);
+
+      // Kind-specific window/date shape.
+      let windowStart: Date | null = null;
+      let windowEnd: Date | null = null;
+      let date: string | null = null;
+      const daysOfWeek = Array.isArray(adjustment.daysOfWeek) ? [...adjustment.daysOfWeek] : [];
+      if (daysOfWeek.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) {
+        throw new ConflictException({
+          code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+          message: 'daysOfWeek entries must be integers 0 (Sunday) … 6 (Saturday).',
+        });
+      }
+      if (kind === 'SEASONAL') {
+        windowStart = parseUtcInstant(adjustment.windowStart ?? '');
+        windowEnd =
+          adjustment.windowEnd === null || adjustment.windowEnd === undefined
+            ? null
+            : parseUtcInstant(adjustment.windowEnd);
+        if (!windowStart || (windowEnd !== null && windowEnd.getTime() <= windowStart.getTime())) {
+          throw new ConflictException({
+            code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_WINDOW_INVALID,
+            message: 'SEASONAL requires windowStart and an optional windowEnd strictly after it.',
+          });
+        }
+      } else if (kind === 'WEEKEND') {
+        if (daysOfWeek.length === 0) {
+          throw new ConflictException({
+            code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+            message: 'WEEKEND requires at least one daysOfWeek entry.',
+          });
+        }
+      } else {
+        // HOLIDAY and SPECIAL_DATE are R1 plain calendar days.
+        const rawDate = typeof adjustment.date === 'string' ? adjustment.date : '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate) || Number.isNaN(new Date(`${rawDate}T00:00:00Z`).getTime())) {
+          throw new ConflictException({
+            code: RatePlanErrorCode.RATE_PLAN_ADJUSTMENT_INVALID,
+            message: `${kind} requires a valid YYYY-MM-DD date.`,
+          });
+        }
+        date = rawDate;
+      }
+
+      validated.push({
+        kind: kind as RatePlanAdjustmentRow['kind'],
+        adjustmentType: adjustmentType as RatePlanAdjustmentRow['adjustmentType'],
+        windowStart,
+        windowEnd,
+        date,
+        daysOfWeek,
+        valueMinor: adjustment.valueMinor,
+        precedence: adjustment.precedence,
+      });
+    }
+    return validated;
   }
 
   /** 06-A04: every scope targets exactly one tenant-owned record. */
@@ -343,6 +550,17 @@ export class RatePlansService {
       scopes: row.scopes.map((scope) => ({
         vehicleId: scope.vehicleId,
         categoryId: scope.categoryId,
+      })),
+      tiers: row.tiers.map((tier) => ({ upToUnits: tier.upToUnits, rateMinor: tier.rateMinor })),
+      adjustments: row.adjustments.map((adjustment) => ({
+        kind: adjustment.kind,
+        adjustmentType: adjustment.adjustmentType,
+        windowStart: adjustment.windowStart?.toISOString() ?? null,
+        windowEnd: adjustment.windowEnd?.toISOString() ?? null,
+        date: adjustment.date,
+        daysOfWeek: adjustment.daysOfWeek,
+        valueMinor: adjustment.valueMinor,
+        precedence: adjustment.precedence,
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

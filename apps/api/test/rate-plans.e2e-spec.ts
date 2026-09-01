@@ -35,6 +35,8 @@ interface RatePlanBody {
   effectiveUntil?: string | null;
   active?: boolean;
   scopes?: Array<{ vehicleId: string | null; categoryId: string | null }>;
+  tiers?: Array<{ upToUnits: number | null; rateMinor: number }>;
+  adjustments?: Array<Record<string, unknown>>;
 }
 
 describe('Rate plan administration (integration)', () => {
@@ -287,6 +289,107 @@ describe('Rate plan administration (integration)', () => {
       .expect(200);
     expect((deactivated.body as RatePlanBody).active).toBe(false);
     expect((deactivated.body as RatePlanBody).baseRateMinor).toBe(6000);
+  });
+
+  it('stores and returns duration tiers and time adjustments (06-B05…B08)', async () => {
+    const auth = await agencyToken('bkp-owner');
+    const created = await api(app)
+      .post(`/api/v1/agencies/${agencyId}/pricing/rate-plans`)
+      .send({
+        ...planBody(),
+        tiers: [
+          { upToUnits: 3, rateMinor: 4200 },
+          { upToUnits: null, rateMinor: 3600 },
+        ],
+        adjustments: [
+          {
+            kind: 'SEASONAL',
+            adjustmentType: 'PERCENT',
+            windowStart: '2026-08-01T00:00:00Z',
+            windowEnd: '2026-09-01T00:00:00Z',
+            valueMinor: 2000,
+            precedence: 1,
+          },
+          {
+            kind: 'WEEKEND',
+            adjustmentType: 'FLAT_PER_UNIT',
+            daysOfWeek: [5, 6],
+            valueMinor: 300,
+            precedence: 1,
+          },
+          {
+            kind: 'HOLIDAY',
+            adjustmentType: 'FLAT_PER_UNIT',
+            date: '2026-11-01',
+            valueMinor: 500,
+            precedence: 1,
+          },
+          {
+            kind: 'SPECIAL_DATE',
+            adjustmentType: 'PERCENT',
+            date: '2026-11-01',
+            valueMinor: 1500,
+            precedence: 1,
+          },
+        ],
+      })
+      .set('Authorization', `Bearer ${auth}`)
+      .expect(201);
+    expect(created.body).toMatchObject({
+      code: 'BASE',
+      tiers: [
+        { upToUnits: 3, rateMinor: 4200 },
+        { upToUnits: null, rateMinor: 3600 },
+      ],
+    });
+    expect((created.body as RatePlanBody).adjustments).toHaveLength(4);
+
+    const ratePlanId = (created.body as RatePlanBody).ratePlanId as string;
+    const read = await api(app)
+      .get(`/api/v1/agencies/${agencyId}/pricing/rate-plans/${ratePlanId}`)
+      .set('Authorization', `Bearer ${auth}`)
+      .expect(200);
+    expect((read.body as RatePlanBody).tiers).toEqual([
+      { upToUnits: 3, rateMinor: 4200 },
+      { upToUnits: null, rateMinor: 3600 },
+    ]);
+    expect((read.body as RatePlanBody).adjustments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'WEEKEND', daysOfWeek: [5, 6] }),
+      ]),
+    );
+
+    // Malformed time rules are stable 409s.
+    const badCases: Array<[Record<string, unknown>, string]> = [
+      [
+        { tiers: [{ upToUnits: 5, rateMinor: 100 }, { upToUnits: 3, rateMinor: 200 }] },
+        'RATE_PLAN_TIER_ORDER_INVALID',
+      ],
+      [
+        {
+          adjustments: [
+            { kind: 'SEASONAL', adjustmentType: 'PERCENT', valueMinor: 100, precedence: 0 },
+          ],
+        },
+        'RATE_PLAN_ADJUSTMENT_WINDOW_INVALID',
+      ],
+      [
+        {
+          adjustments: [
+            { kind: 'HOLIDAY', adjustmentType: 'FLAT_PER_UNIT', date: '01/11', valueMinor: 100, precedence: 0 },
+          ],
+        },
+        'RATE_PLAN_ADJUSTMENT_INVALID',
+      ],
+    ];
+    for (const [overrides, code] of badCases) {
+      const res = await api(app)
+        .post(`/api/v1/agencies/${agencyId}/pricing/rate-plans`)
+        .send({ ...planBody(), code: `T${Math.random().toString(36).slice(2, 8).toUpperCase()}`, ...overrides })
+        .set('Authorization', `Bearer ${auth}`)
+        .expect(409);
+      expect((res.body as ApiErrorBody).error.code).toBe(code);
+    }
   });
 
   it('isolates tenants and enforces pricing permissions (FINANCE reads only)', async () => {

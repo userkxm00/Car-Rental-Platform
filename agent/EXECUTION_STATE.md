@@ -6,9 +6,9 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-06`
-- Current workstream: `06-B Time Rules`
-- Current task: `06-B01` (hourly pricing — see WBS)
-- Last completed task: `06-A07` (rate administration API — 06-A Rate Model COMPLETE)
+- Current workstream: `06-C Commercial Adjustments`
+- Current task: `06-C01` (promotions — see WBS)
+- Last completed task: `06-B08` (weekend/holiday rules — 06-B Time Rules COMPLETE)
 - Last completed phase: `PHASE-05 Booking Engine`
 - Current attempt: `1`
 - Last validation: after 06-A — build 0 → typecheck 0 → unit 282 (api, 28 suites) → e2e 164 (21 suites incl. rate-plans); lint: pricing production code 0, remaining spec errors are the established `expect(mock.method)` idiom — 2026-08-31
@@ -66,7 +66,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-06 / 06-B / 06-B01`
+`PHASE-06 / 06-C / 06-C01`
 
 ## Phase 05 result (Booking Engine)
 

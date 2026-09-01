@@ -1,12 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { RateDurationUnit } from '@prisma/client';
+import type { Prisma, RateAdjustmentKind, RateAdjustmentType, RateDurationUnit } from '@prisma/client';
 
 /**
- * PHASE-06 / 06-A07 persistence: rate plans with their applicability
- * scopes (06-A04). Scope replacement is transactional — a plan's targets
- * are always stored as a consistent set.
+ * PHASE-06 / 06-A07 + 06-B persistence: rate plans with their
+ * applicability scopes (06-A04), duration tiers (06-B05) and time
+ * adjustments (06-B06..B08). Child-set replacement is transactional — a
+ * plan's targets, tiers and adjustments are always stored as consistent
+ * sets.
  */
+
+export interface RatePlanTierRow {
+  upToUnits: number | null;
+  rateMinor: number;
+}
+
+export interface RatePlanAdjustmentRow {
+  kind: RateAdjustmentKind;
+  adjustmentType: RateAdjustmentType;
+  windowStart: Date | null;
+  windowEnd: Date | null;
+  date: string | null;
+  daysOfWeek: number[];
+  valueMinor: number;
+  precedence: number;
+}
 
 export interface RatePlanRow {
   id: string;
@@ -23,6 +41,8 @@ export interface RatePlanRow {
   createdAt: Date;
   updatedAt: Date;
   scopes: Array<{ vehicleId: string | null; categoryId: string | null }>;
+  tiers: RatePlanTierRow[];
+  adjustments: RatePlanAdjustmentRow[];
 }
 
 export interface RatePlanCreateInput {
@@ -37,6 +57,8 @@ export interface RatePlanCreateInput {
   effectiveUntil: Date | null;
   active: boolean;
   scopes: Array<{ vehicleId: string | null; categoryId: string | null }>;
+  tiers: RatePlanTierRow[];
+  adjustments: RatePlanAdjustmentRow[];
 }
 
 export interface RatePlanPatch {
@@ -80,9 +102,33 @@ export class RatePlansRepository {
           })),
         });
       }
+      if (input.tiers.length > 0) {
+        await tx.ratePlanTier.createMany({
+          data: input.tiers.map((tier) => ({
+            ratePlanId: created.id,
+            upToUnits: tier.upToUnits,
+            rateMinor: tier.rateMinor,
+          })),
+        });
+      }
+      if (input.adjustments.length > 0) {
+        await tx.ratePlanAdjustment.createMany({
+          data: input.adjustments.map((adjustment) => ({
+            ratePlanId: created.id,
+            kind: adjustment.kind,
+            adjustmentType: adjustment.adjustmentType,
+            windowStart: adjustment.windowStart,
+            windowEnd: adjustment.windowEnd,
+            date: adjustment.date ? new Date(adjustment.date) : null,
+            daysOfWeek: adjustment.daysOfWeek,
+            valueMinor: adjustment.valueMinor,
+            precedence: adjustment.precedence,
+          })),
+        });
+      }
       return tx.ratePlan.findUniqueOrThrow({
         where: { id: created.id },
-        include: { scopes: true },
+        include: CHILDREN_INCLUDE,
       });
     });
     return this.toRow(plan);
@@ -91,7 +137,7 @@ export class RatePlansRepository {
   async findInTenant(tenantId: string, ratePlanId: string): Promise<RatePlanRow | null> {
     const plan = await this.prisma.ratePlan.findFirst({
       where: { id: ratePlanId, tenantId },
-      include: { scopes: true },
+      include: CHILDREN_INCLUDE,
     });
     return plan ? this.toRow(plan) : null;
   }
@@ -100,16 +146,16 @@ export class RatePlansRepository {
     const plans = await this.prisma.ratePlan.findMany({
       where: { tenantId },
       orderBy: [{ active: 'desc' }, { code: 'asc' }],
-      include: { scopes: true },
+      include: CHILDREN_INCLUDE,
     });
     return plans.map((plan) => this.toRow(plan));
   }
 
-  /** 06-B: active plans of a tenant with their scopes (engine candidates). */
+  /** 06-B: active plans of a tenant with their children (engine candidates). */
   async listActiveCandidates(tenantId: string): Promise<RatePlanRow[]> {
     const plans = await this.prisma.ratePlan.findMany({
       where: { tenantId, active: true },
-      include: { scopes: true },
+      include: CHILDREN_INCLUDE,
     });
     return plans.map((plan) => this.toRow(plan));
   }
@@ -119,6 +165,8 @@ export class RatePlansRepository {
     ratePlanId: string,
     patch: RatePlanPatch,
     replaceScopes?: Array<{ vehicleId: string | null; categoryId: string | null }>,
+    replaceTiers?: RatePlanTierRow[],
+    replaceAdjustments?: RatePlanAdjustmentRow[],
   ): Promise<RatePlanRow | null> {
     const plan = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.ratePlan.updateMany({
@@ -150,9 +198,39 @@ export class RatePlansRepository {
           });
         }
       }
+      if (replaceTiers !== undefined) {
+        await tx.ratePlanTier.deleteMany({ where: { ratePlanId } });
+        if (replaceTiers.length > 0) {
+          await tx.ratePlanTier.createMany({
+            data: replaceTiers.map((tier) => ({
+              ratePlanId,
+              upToUnits: tier.upToUnits,
+              rateMinor: tier.rateMinor,
+            })),
+          });
+        }
+      }
+      if (replaceAdjustments !== undefined) {
+        await tx.ratePlanAdjustment.deleteMany({ where: { ratePlanId } });
+        if (replaceAdjustments.length > 0) {
+          await tx.ratePlanAdjustment.createMany({
+            data: replaceAdjustments.map((adjustment) => ({
+              ratePlanId,
+              kind: adjustment.kind,
+              adjustmentType: adjustment.adjustmentType,
+              windowStart: adjustment.windowStart,
+              windowEnd: adjustment.windowEnd,
+              date: adjustment.date ? new Date(adjustment.date) : null,
+              daysOfWeek: adjustment.daysOfWeek,
+              valueMinor: adjustment.valueMinor,
+              precedence: adjustment.precedence,
+            })),
+          });
+        }
+      }
       return tx.ratePlan.findUniqueOrThrow({
         where: { id: ratePlanId },
-        include: { scopes: true },
+        include: CHILDREN_INCLUDE,
       });
     });
     return plan ? this.toRow(plan) : null;
@@ -173,6 +251,17 @@ export class RatePlansRepository {
     createdAt: Date;
     updatedAt: Date;
     scopes: Array<{ vehicleId: string | null; categoryId: string | null }>;
+    tiers: Array<{ upToUnits: number | null; rateMinor: number }>;
+    adjustments: Array<{
+      kind: RateAdjustmentKind;
+      adjustmentType: RateAdjustmentType;
+      windowStart: Date | null;
+      windowEnd: Date | null;
+      date: Date | null;
+      daysOfWeek: number[];
+      valueMinor: number;
+      precedence: number;
+    }>;
   }): RatePlanRow {
     return {
       id: plan.id,
@@ -192,6 +281,28 @@ export class RatePlansRepository {
         vehicleId: scope.vehicleId,
         categoryId: scope.categoryId,
       })),
+      tiers: plan.tiers.map((tier) => ({ upToUnits: tier.upToUnits, rateMinor: tier.rateMinor })),
+      adjustments: plan.adjustments.map((adjustment) => ({
+        kind: adjustment.kind,
+        adjustmentType: adjustment.adjustmentType,
+        windowStart: adjustment.windowStart,
+        windowEnd: adjustment.windowEnd,
+        date: adjustment.date ? localDayKeyOf(adjustment.date) : null,
+        daysOfWeek: adjustment.daysOfWeek,
+        valueMinor: adjustment.valueMinor,
+        precedence: adjustment.precedence,
+      })),
     };
   }
 }
+
+/** DATE columns come back at UTC midnight — render the plain day key. */
+function localDayKeyOf(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+const CHILDREN_INCLUDE = {
+  scopes: true,
+  tiers: true,
+  adjustments: true,
+} satisfies Prisma.RatePlanInclude;
