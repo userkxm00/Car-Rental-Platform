@@ -218,10 +218,54 @@ R1 boundaries: holiday **seed rules** (06-B06) land with the calendar
 sync workstream (12-C); seasonal curves, weekend multipliers and
 special-date overrides are configured per plan, never hardcoded.
 
+## Implemented (06-C — commercial adjustments)
+
+On top of the 06-A/06-B layers (`apps/api/src/pricing/`):
+
+- **Promotions (06-C01) & eligibility scopes (06-C09)**: `promotions`
+  with half-open `[effectiveFrom, effectiveUntil)` windows,
+  `maxRedemptions` caps and optional duration requirements
+  (`minDurationUnits` + `durationUnit`). A promotion without scope rows
+  is tenant-wide; with rows, the quote context must match at least one
+  row on every populated dimension (vehicle / category / pickup
+  branch). Promotions do **not** stack — the single best promotion
+  applies (largest computed amount → FIXED over PERCENT → earliest
+  `createdAt` → smallest id, so the choice is deterministic).
+- **Coupons (06-C02)**: `coupons` (unique code per agency, case
+  normalized), windows and `maxUses`/`usedCount` caps. Stacking R1: a
+  valid customer coupon **wins over** promotions; coupons are not
+  stackable with each other.
+- **Discount arithmetic**: PERCENT values are basis points
+  (`round(base × value / 10 000)`), FIXED_MINOR amounts are capped at
+  the base — all integer minor units, mirrors the 06-B rounding
+  centralization.
+- **Extras catalog (06-C03)**: `extras` are agency-priced
+  (`PER_BOOKING`, `PER_DAY`, `PER_RENTAL_UNIT`); clients request
+  extras by key and never submit amounts.
+- **Context fee rules (06-C04…C07)**: `fee_rules` per kind —
+  DELIVERY_FEE (delivery zone, `baseMinor` + optional per-km/
+  per-occurrence), DISTANCE_FEE (delivery zone, `perKmMinor`; R1
+  distance is the straight-line haversine between coordinates, PostGIS
+  polygons arrive with 02-C08), ONE_WAY_FEE (base per booking),
+  AFTER_HOURS_FEE (branch, `perOccurrenceMinor`; evaluated against the
+  location hours in the tenant timezone, overnight windows supported).
+  Kind/target shapes are enforced at the boundary (a zone only for
+  delivery/distance, a branch only for after-hours).
+- **Deposit pricing (06-C08)**: `deposit_policies` (FIXED_MINOR or
+  PERCENT_OF_TOTAL basis points) with vehicle/category scope
+  overrides; selection specificity is vehicle > category > global.
+- **Administration (06-C)**: all five catalogs live under
+  `agencies/:agencyId/pricing/commercial/{promotions,coupons,extras,
+  fee-rules,deposit-policies}` with `pricing.read`/`pricing.manage`
+  permissions (FINANCE reads, never manages). Scope targets are
+  validated tenant-side; child sets are replaced transactionally;
+  deactivation is PATCH — no hard deletes (price history stays
+  reconstructible).
+
 The `QUOTE_PRICING_PORT` provider is still unregistered (quotes remain
 `pricing: null` and not bookable-as-priced) until the engine can compute:
-time rules (06-B) → adjustments (06-C) → financial truth + snapshots
-(06-D).
+rate model (06-A) → time rules (06-B) → commercial adjustments (06-C,
+done) → financial truth + snapshots (06-D).
 
 ## Definition of done
 

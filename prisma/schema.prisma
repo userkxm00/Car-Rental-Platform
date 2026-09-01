@@ -111,6 +111,11 @@ model Tenant {
   bookingCounter    BookingCounter?
   idempotencyRecords BookingIdempotencyRecord[]
   ratePlans         RatePlan[]
+  promotions        Promotion[]
+  coupons           Coupon[]
+  extras            Extra[]
+  feeRules          FeeRule[]
+  depositPolicies   DepositPolicy[]
 
   @@map("tenants")
 }
@@ -223,6 +228,8 @@ model Branch {
   quoteReturns   QuoteRecord[] @relation("QuoteReturnBranch")
   bookingPickups Booking[]     @relation("BookingPickupBranch")
   bookingReturns Booking[]     @relation("BookingReturnBranch")
+  promotionScopes PromotionScope[]
+  feeRules        FeeRule[]
 
   @@unique([tenantId, code])
   @@index([locationId])
@@ -274,6 +281,7 @@ model DeliveryZone {
   tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   quoteRecords      QuoteRecord[]
   bookings          Booking[]
+  feeRules          FeeRule[]
 
   @@index([tenantId])
   @@map("delivery_zones")
@@ -307,6 +315,8 @@ model VehicleCategory {
   quoteRecords     QuoteRecord[]
   bookingsRequested Booking[]        @relation("BookingRequestedCategory")
   ratePlanScopes   RatePlanScope[]
+  promotionScopes  PromotionScope[]
+  depositPolicyScopes DepositPolicyScope[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -352,6 +362,8 @@ model Vehicle {
   quoteRecords    QuoteRecord[]
   bookingsAssigned Booking[]         @relation("BookingAssignedVehicle")
   ratePlanScopes  RatePlanScope[]
+  promotionScopes PromotionScope[]
+  depositPolicyScopes DepositPolicyScope[]
 
   @@unique([tenantId, plateNumber])
   @@index([tenantId])
@@ -774,6 +786,196 @@ enum RateAdjustmentKind {
 enum RateAdjustmentType {
   PERCENT
   FLAT_PER_UNIT
+}
+
+/// PHASE-06 / 06-C: commercial adjustments — promotions (06-C01), coupons
+/// (06-C02), typed extras (06-C03), fee rules (06-C04..C07), deposit
+/// pricing (06-C08) and eligibility (06-C09). R1 stacking: a valid coupon
+/// wins over promotions; promotions themselves do not stack — the single
+/// best promotion applies (deterministic order in the pricing domain).
+
+enum CommercialDiscountType {
+  PERCENT
+  FIXED_MINOR
+}
+
+/// 06-C01: promotion with optional duration requirement and redemption cap.
+model Promotion {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  code             String
+  name             String
+  discountType     CommercialDiscountType
+  valueMinor       Int
+  minDurationUnits Int?
+  durationUnit     RateDurationUnit?
+  effectiveFrom    DateTime
+  effectiveUntil   DateTime?
+  maxRedemptions   Int?
+  redemptionsCount Int      @default(0)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopes PromotionScope[]
+
+  @@unique([tenantId, code])
+  @@map("promotions")
+}
+
+/// 06-C01/09: eligibility — no scopes = tenant-wide; each row targets one
+/// vehicle, one category or one branch.
+model PromotionScope {
+  id          String   @id @default(uuid()) @db.Uuid
+  promotionId String   @db.Uuid
+  vehicleId   String?  @db.Uuid
+  categoryId  String?  @db.Uuid
+  branchId    String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  promotion Promotion        @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  vehicle   Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category  VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  branch    Branch?          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@map("promotion_scopes")
+}
+
+/// 06-C02: client-redeemed discount code with a usage cap. `usedCount` is
+/// incremented atomically when a booking snapshot consumes the coupon
+/// (06-D); the configuration window/limit checks are domain-side.
+model Coupon {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  code         String
+  name         String
+  discountType CommercialDiscountType
+  valueMinor   Int
+  effectiveFrom DateTime
+  effectiveUntil DateTime?
+  maxUses      Int?
+  usedCount    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@map("coupons")
+}
+
+/// 06-C03: typed extras catalog (architecture/pricing-engine.md "Extras"):
+/// the agency prices its own catalog; clients can never submit amounts.
+enum ExtraType {
+  ADDITIONAL_DRIVER
+  CHILD_SEAT
+  GPS_DEVICE
+  INSURANCE_OPTION
+  ADDITIONAL_MILEAGE
+  FUEL_CHARGE
+  LATE_RETURN_CHARGE
+  DELIVERY_SERVICE
+  OTHER
+}
+
+enum ExtraPricingUnit {
+  PER_BOOKING
+  PER_DAY
+  PER_RENTAL_UNIT
+}
+
+model Extra {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  key         String
+  type        ExtraType
+  name        String
+  pricingUnit ExtraPricingUnit
+  amountMinor Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@map("extras")
+}
+
+/// 06-C04..C07: context-computed fee rules. Absence of a rule = no fee.
+enum FeeRuleKind {
+  DELIVERY_FEE
+  DISTANCE_FEE
+  ONE_WAY_FEE
+  AFTER_HOURS_FEE
+}
+
+model FeeRule {
+  id              String      @id @default(uuid()) @db.Uuid
+  tenantId        String      @db.Uuid
+  kind            FeeRuleKind
+  /// DELIVERY_FEE/DISTANCE_FEE: applies when the delivery zone is used.
+  deliveryZoneId  String?     @db.Uuid
+  /// Pickup branch the rule applies to (null = all branches).
+  branchId        String?     @db.Uuid
+  /// Flat amount (delivery/one-way base).
+  baseMinor       Int         @default(0)
+  /// DISTANCE_FEE: minor amount per km (haversine, straight-line R1).
+  perKmMinor      Int?
+  /// AFTER_HOURS_FEE: charged once per out-of-hours pickup or return.
+  perOccurrenceMinor Int?
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveryZone DeliveryZone? @relation(fields: [deliveryZoneId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, kind])
+  @@map("fee_rules")
+}
+
+/// 06-C08: deposit pricing. The deposit is tracked separately from rental
+/// revenue (architecture/pricing-engine.md); this is the pricing side —
+/// the authorization/receipt/release lifecycle lands with payments (09).
+enum DepositPolicyType {
+  FIXED_MINOR
+  PERCENT_OF_TOTAL
+}
+
+model DepositPolicy {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  name        String
+  depositType DepositPolicyType
+  /// FIXED_MINOR: minor amount; PERCENT_OF_TOTAL: basis points.
+  valueMinor  Int
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scopes DepositPolicyScope[]
+
+  @@map("deposit_policies")
+}
+
+/// 06-C08: per-vehicle/category deposit overrides; no scopes = global.
+model DepositPolicyScope {
+  id             String   @id @default(uuid()) @db.Uuid
+  depositPolicyId String  @db.Uuid
+  vehicleId      String?  @db.Uuid
+  categoryId     String?  @db.Uuid
+  createdAt      DateTime @default(now())
+
+  depositPolicy DepositPolicy   @relation(fields: [depositPolicyId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  category      VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("deposit_policy_scopes")
 }
 
 enum VehicleStatus {
