@@ -13,6 +13,7 @@ import { QuotesModule } from './quotes/quotes.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { PricingModule } from './pricing/pricing.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { CustomersModule } from './customers/customers.module';
 
 /**
  * Root application module.
@@ -36,6 +37,7 @@ import { TenantsModule } from './tenants/tenants.module';
     QuotesModule,
     BookingsModule,
     PricingModule,
+    CustomersModule,
     HealthModule,
   ],
 })

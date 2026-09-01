@@ -26,6 +26,12 @@ export const Permission = {
   BOOKING_EXTEND: 'booking.extend',
   BOOKING_RETURN: 'booking.return',
 
+  // Customers (07-A)
+  CUSTOMER_READ: 'customer.read',
+  CUSTOMER_MANAGE: 'customer.manage',
+  CUSTOMER_LINK: 'customer.link',
+  CUSTOMER_DOCUMENT_VERIFY: 'customer.document.verify',
+
   // Inspections
   INSPECTION_CREATE: 'inspection.create',
   INSPECTION_APPROVE: 'inspection.approve',
@@ -63,6 +69,10 @@ export const PERMISSION_DOC: Record<PermissionValue, string> = {
   [Permission.BOOKING_CANCEL]: 'Cancel bookings.',
   [Permission.BOOKING_EXTEND]: 'Extend bookings.',
   [Permission.BOOKING_RETURN]: 'Return bookings.',
+  [Permission.CUSTOMER_READ]: 'Read agency customer records.',
+  [Permission.CUSTOMER_MANAGE]: 'Create and update agency customer records.',
+  [Permission.CUSTOMER_LINK]: 'Link/unlink a platform account to a customer record.',
+  [Permission.CUSTOMER_DOCUMENT_VERIFY]: 'Verify customer identity documents.',
   [Permission.INSPECTION_CREATE]: 'Record inspections.',
   [Permission.INSPECTION_APPROVE]: 'Approve inspections.',
   [Permission.PAYMENT_READ]: 'Read payments.',
