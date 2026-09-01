@@ -5,16 +5,16 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-06`
-- Current workstream: `06-D Financial Truth`
-- Current task: `06-D10` (phase gate — HUMAN DECISION checkpoint)
-- Last completed task: `06-D09` (pricing concurrency tests — 06-D COMPLETE, gate pending review)
-- Last completed phase: `PHASE-05 Booking Engine`
+- Current phase: `PHASE-07`
+- Current workstream: `07-A Customer Identity/Profile`
+- Current task: `07-A07` (search history baseline) — 07-A sweep implemented; docs/commit pending
+- Last completed task: `07-A01…A07` implementation verified (unit 51, e2e 17); final docs/commit in progress
+- Last completed phase: `PHASE-06 Pricing Engine`
 - Current attempt: `1`
-- Last validation: after 06-D — build 0 → typecheck 0 → unit 356 (api, 33 suites) → e2e 175 (23 suites incl. pricing-truth); lint: pricing production code 0, remaining spec errors are the established `expect(mock.method)` idiom — 2026-09-01
-- Last known good commit: `92c231c` on `arena/01a05097-car-rental-platform` (pushed; 06-D commits pending push)
+- Last validation: 07-A sweep — build 0 → typecheck 0 → lint 0 (all new code) → unit 407 (36 suites) → e2e 192 (24 suites incl. new `customers` 17) — 2026-09-01
+- Last known good commit: `ef938ca` on `arena/01a05097-car-rental-platform` (pushed; origin current)
 - Blocker: none
-- Next action: PHASE-06 gate (06-D10) — representative pricing scenarios verified with reproducible server totals; STOP for human decision
+- Next action: record 07-A evidence → commit + push → continue to 07-B (search contract/location search) automatically
 - Last updated: 2026-09-01
 
 ## Canonical execution model

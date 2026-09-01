@@ -16,6 +16,9 @@ Legend:
 | Manage plans/licenses | A | — | — | — | — | — |
 | Manage agency settings | A* | A | W/R scoped | — | — | — |
 | Manage branches | A* | A | R/W scoped | R | — | — |
+| Manage customers | A* | A | R/W scoped | R/W operational | R | own linked records |
+| Verify customer documents | A* | A | W scoped | W | — | submit own |
+| Link customer accounts | A* | A | W scoped | — | — | own linkage |
 | View fleet | A* | A | R/W scoped | R/W operational | R | — |
 | Create/edit vehicles | A* | A | W scoped | limited | — | — |
 | Manage vehicle documents | A* | A | W scoped | W operational | — | — |
