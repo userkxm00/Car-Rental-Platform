@@ -317,4 +317,67 @@ describe('Marketplace search (integration)', () => {
     const distances = (byDistance.body as SearchBody).items.map((item) => item.pickupBranch?.location.city ?? '');
     expect(distances.length).toBeGreaterThan(0);
   });
+
+  it('filters by radius and viewport proximity (07-C09)', async () => {
+    const oranRadius = await search({ start: START, end: END, lat: '35.7', lng: '-0.63', radiusKm: '10' }).expect(200);
+    const oranBody = oranRadius.body as SearchBody;
+    expect(oranBody.total).toBeGreaterThan(0);
+    for (const item of oranBody.items) {
+      expect(item.pickupBranch?.location.city).toBe('Oran');
+    }
+    expect(oranBody.filters.radiusKm).toBe(10);
+
+    const oranBbox = await search({ start: START, end: END, bbox: '-5,34,1,37' }).expect(200);
+    const oranBboxBody = oranBbox.body as SearchBody;
+    expect(oranBboxBody.total).toBe(oranBody.total);
+    expect(oranBboxBody.filters.bbox).toEqual({ west: -5, south: 34, east: 1, north: 37 });
+
+    const algiersBbox = await search({ start: START, end: END, bbox: '2,36,4,37' }).expect(200);
+    for (const item of (algiersBbox.body as SearchBody).items) {
+      expect(item.pickupBranch?.location.city).toBe('Algiers');
+    }
+
+    const radiusWithoutCoords = await errorOf(search({ start: START, end: END, radiusKm: '10' }));
+    expect(radiusWithoutCoords.status).toBe(409);
+    expect(radiusWithoutCoords.code).toBe('RADIUS_REQUIRES_COORDINATES');
+
+    const malformedBbox = await errorOf(search({ start: START, end: END, bbox: '1,2,3' }));
+    expect(malformedBbox.status).toBe(409);
+    expect(malformedBbox.code).toBe('INVALID_BBOX');
+  });
+
+  it('serves the public locations feed for map pins (07-C05/07-C06)', async () => {
+    interface LocationsBody {
+      items: Array<{
+        branch: { id: string };
+        location: { id: string; name: string; city: string | null; latitude: number; longitude: number };
+        agency: { id: string; slug: string };
+      }>;
+      total: number;
+    }
+
+    // A branch without coordinates must never become a pin.
+    const noCoordsLocation = await prisma.location.create({
+      data: { name: 'Oran Suburb', city: 'Oran', countryCode: 'DZ', latitude: null, longitude: null },
+    });
+    await createBranch(agencyId, noCoordsLocation.id);
+
+    const res = await api(app).get('/api/v1/search/locations').expect(200);
+    const body = res.body as LocationsBody;
+    expect(body.total).toBeGreaterThanOrEqual(3);
+    for (const item of body.items) {
+      expect(item.location.latitude).not.toBeNull();
+      expect(item.location.longitude).not.toBeNull();
+    }
+    const noCoordsPin = body.items.find((item) => item.location.id === noCoordsLocation.id);
+    expect(noCoordsPin).toBeUndefined();
+    const agencies = new Set(body.items.map((item) => item.agency.id));
+    expect(agencies.has(agencyId)).toBe(true);
+
+    // Opting out removes an agency's pins.
+    await tenants.setMarketplaceEnabled(otherAgencyId, false);
+    const afterOptOut = (await api(app).get('/api/v1/search/locations').expect(200)).body as LocationsBody;
+    expect(afterOptOut.items.every((item) => item.agency.id !== otherAgencyId)).toBe(true);
+    await tenants.setMarketplaceEnabled(otherAgencyId, true);
+  });
 });

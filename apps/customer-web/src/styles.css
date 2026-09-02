@@ -1,0 +1,291 @@
+/* KAVRIQO marketplace — customer-web layout (07-C). */
+
+.kv-search-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv-space-4, 1rem);
+  padding: var(--kv-space-4, 1rem);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.kv-search-hero h1 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.kv-search-hero p {
+  margin: 0.25rem 0 0;
+  color: var(--kv-color-text-muted, #5c6470);
+}
+
+/* --- Search form ------------------------------------------------------ */
+
+.kv-search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--kv-space-3, 0.75rem);
+  align-items: end;
+  background: var(--kv-color-surface, #ffffff);
+  border: 1px solid var(--kv-color-border, #d7dce3);
+  border-radius: var(--kv-radius-lg, 12px);
+  padding: var(--kv-space-4, 1rem);
+}
+
+.kv-search-form__actions {
+  display: flex;
+  align-items: end;
+}
+
+.kv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.kv-field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--kv-color-text-muted, #5c6470);
+}
+
+/* --- Toolbar ----------------------------------------------------------- */
+
+.kv-search-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kv-space-3, 0.75rem);
+  flex-wrap: wrap;
+}
+
+.kv-search-toolbar__count {
+  font-weight: 600;
+}
+
+.kv-search-toolbar__controls {
+  display: flex;
+  align-items: end;
+  gap: var(--kv-space-3, 0.75rem);
+  flex-wrap: wrap;
+}
+
+/* --- Split map/list (07-C07) ------------------------------------------ */
+
+.kv-search-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--kv-space-4, 1rem);
+}
+
+/* Mobile: the mode attribute hides the inactive pane. */
+.kv-search-split[data-mode='map'] .kv-list-pane {
+  display: none;
+}
+
+.kv-search-split[data-mode='list'] .kv-map-pane {
+  display: none;
+}
+
+/* Desktop/tablet: split view, both panes visible (docs/07). */
+@media (min-width: 900px) {
+  .kv-search-split {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .kv-search-split[data-mode='map'] .kv-list-pane,
+  .kv-search-split[data-mode='list'] .kv-map-pane {
+    display: block;
+  }
+}
+
+.kv-map-pane {
+  position: relative;
+  min-height: 420px;
+  height: 70vh;
+  max-height: 720px;
+  border-radius: var(--kv-radius-lg, 12px);
+  overflow: hidden;
+  border: 1px solid var(--kv-color-border, #d7dce3);
+}
+
+.kv-map {
+  position: absolute;
+  inset: 0;
+}
+
+.kv-map-controls {
+  position: absolute;
+  inset-inline-end: 12px;
+  bottom: 24px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* --- List pane ---------------------------------------------------------- */
+
+.kv-list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv-space-3, 0.75rem);
+  overflow-y: auto;
+  max-height: 70vh;
+}
+
+.kv-list-pane__empty {
+  color: var(--kv-color-text-muted, #5c6470);
+  padding: var(--kv-space-4, 1rem);
+}
+
+.kv-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv-space-3, 0.75rem);
+}
+
+.kv-result-card {
+  border: 1px solid var(--kv-color-border, #d7dce3);
+  border-radius: var(--kv-radius-lg, 12px);
+  padding: var(--kv-space-4, 1rem);
+  background: var(--kv-color-surface, #ffffff);
+  cursor: pointer;
+}
+
+.kv-result-card:hover,
+.kv-result-card--selected {
+  border-color: var(--kv-color-primary, #0f6b4f);
+  box-shadow: 0 0 0 1px var(--kv-color-primary, #0f6b4f);
+}
+
+.kv-result-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kv-space-3, 0.75rem);
+}
+
+.kv-result-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.kv-result-card__agency {
+  margin: 0.15rem 0 0;
+  color: var(--kv-color-text-muted, #5c6470);
+  font-size: 0.9rem;
+}
+
+.kv-result-card__price {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.kv-result-card__price strong {
+  font-size: 1.1rem;
+  color: var(--kv-color-primary, #0f6b4f);
+}
+
+.kv-result-card__price span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--kv-color-text-muted, #5c6470);
+}
+
+.kv-result-card__meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.kv-result-card__meta span {
+  background: var(--kv-color-surface-muted, #eef1f5);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.kv-result-card__branch,
+.kv-result-card__features {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--kv-color-text-muted, #5c6470);
+}
+
+/* --- Autocomplete (07-C04) ---------------------------------------------- */
+
+.kv-autocomplete {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.kv-autocomplete__list {
+  position: absolute;
+  top: 100%;
+  inset-inline: 0;
+  z-index: 10;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--kv-color-surface, #ffffff);
+  border: 1px solid var(--kv-color-border, #d7dce3);
+  border-radius: var(--kv-radius-md, 8px);
+  max-height: 260px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.kv-autocomplete__option {
+  width: 100%;
+  text-align: start;
+  border: 0;
+  background: none;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.kv-autocomplete__option--active {
+  background: var(--kv-color-surface-muted, #eef1f5);
+}
+
+/* --- Pagination ---------------------------------------------------------- */
+
+.kv-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--kv-space-3, 0.75rem);
+}
+
+/* --- Map popup ------------------------------------------------------------ */
+
+.kv-map-popup {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  min-width: 180px;
+}
+
+.kv-map-popup strong {
+  font-size: 0.95rem;
+}
+
+.kv-map-popup__price {
+  font-weight: 700;
+  color: var(--kv-color-primary, #0f6b4f);
+}
+
+.kv-map-popup a {
+  color: var(--kv-color-primary, #0f6b4f);
+}

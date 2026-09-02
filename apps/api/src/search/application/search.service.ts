@@ -7,7 +7,9 @@ import {
 } from '../../quotes/application/ports/quote-pricing.port';
 import type { QuotePricingPayload } from '../../quotes/domain/quote-contract';
 import {
+  MarketplaceBranchLocation,
   SearchErrorCode,
+  SearchLocationsResponse,
   SearchOffer,
   SearchOffersQuery,
   SearchOffersResponse,
@@ -15,10 +17,13 @@ import {
 import {
   compareOffers,
   matchesFeatures,
+  nearestByDistance,
   offerDistanceKm,
   parseSearchQuery,
   ParsedSearchQuery,
+  withinBbox,
   withinPriceRange,
+  withinRadiusKm,
 } from '../domain/search-rules';
 import { MarketplaceRepository, OfferBranchRow, OfferVehicleRow } from '../infrastructure/marketplace.repository';
 
@@ -67,7 +72,12 @@ export class SearchService {
         }
       } else if (parsed.pickupCity) {
         const branches = await this.repository.findBranchesByCity(agency.id, parsed.pickupCity);
-        pickupBranch = branches[0] ?? null;
+        // 07-C09: with coordinates present, pin the closest matching
+        // pickup point (map/list parity) instead of an arbitrary one.
+        pickupBranch =
+          (parsed.lat !== null
+            ? nearestByDistance(branches, parsed.lat, parsed.lng, (branch) => branch.location)
+            : (branches[0] ?? null)) ?? null;
         if (!pickupBranch) {
           continue;
         }
@@ -97,12 +107,17 @@ export class SearchService {
         if (!pricing) {
           continue;
         }
-        const distanceKm = offerDistanceKm(
-          parsed.lat,
-          parsed.lng,
-          pickupBranch?.location.latitude ?? row.currentBranch?.location.latitude ?? null,
-          pickupBranch?.location.longitude ?? row.currentBranch?.location.longitude ?? null,
-        );
+        const branchLat = pickupBranch?.location.latitude ?? row.currentBranch?.location.latitude ?? null;
+        const branchLng = pickupBranch?.location.longitude ?? row.currentBranch?.location.longitude ?? null;
+        const distanceKm = offerDistanceKm(parsed.lat, parsed.lng, branchLat, branchLng);
+        // 07-C09: spatial proximity — offers whose pickup point cannot be
+        // proven inside the radius/viewport fail closed.
+        if (!withinRadiusKm(distanceKm, parsed.radiusKm)) {
+          continue;
+        }
+        if (!withinBbox(branchLat, branchLng, parsed.bbox)) {
+          continue;
+        }
         if (!withinPriceRange(pricing.totalMinor, parsed.priceMinMinor, parsed.priceMaxMinor)) {
           continue;
         }
@@ -163,8 +178,38 @@ export class SearchService {
         priceMaxMinor: parsed.priceMaxMinor,
         lat: parsed.lat,
         lng: parsed.lng,
+        radiusKm: parsed.radiusKm,
+        bbox: parsed.bbox,
       },
     };
+  }
+
+  /**
+   * 07-C05/07-C06: map markers for the marketplace — the pickup points of
+   * participating agencies (branches/parking/pickup), never live vehicle
+   * positions. Public and unpaginated by design: pins are clustered
+   * client-side.
+   */
+  async listLocations(): Promise<SearchLocationsResponse> {
+    const rows = await this.repository.listBranchLocations();
+    const items: MarketplaceBranchLocation[] = [];
+    for (const row of rows) {
+      if (row.location.latitude === null || row.location.longitude === null) {
+        continue;
+      }
+      items.push({
+        branch: { id: row.id, name: row.name },
+        location: {
+          id: row.location.id,
+          name: row.location.name,
+          city: row.location.city,
+          latitude: row.location.latitude,
+          longitude: row.location.longitude,
+        },
+        agency: { id: row.tenant.id, name: row.tenant.name, slug: row.tenant.slug },
+      });
+    }
+    return { items, total: items.length };
   }
 
   private parse(query: SearchOffersQuery, now: Date): ParsedSearchQuery {
@@ -199,6 +244,7 @@ export class SearchService {
         tenantId,
         mode: 'VEHICLE',
         vehicleId: row.id,
+        categoryId: row.category.id,
         start: parsed.start,
         end: parsed.end,
         pickupBranchId: pickupBranch?.id ?? row.currentBranchId ?? undefined,

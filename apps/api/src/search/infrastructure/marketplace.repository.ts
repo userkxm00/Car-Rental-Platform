@@ -151,6 +151,31 @@ export class MarketplaceRepository {
     });
   }
 
+  /**
+   * 07-C05/07-C06: public pickup-point feed for marketplace map markers.
+   * Only ACTIVE branches of participating agencies, only rows with real
+   * coordinates (pins without coordinates are meaningless) — and nothing
+   * else. Privacy boundary: pickup locations, never vehicle positions.
+   */
+  async listBranchLocations(): Promise<MarketplaceBranchLocationRow[]> {
+    return this.prisma.branch.findMany({
+      where: {
+        status: 'ACTIVE',
+        location: { latitude: { not: null }, longitude: { not: null } },
+        tenant: { status: 'ACTIVE', marketplaceEnabled: true },
+      },
+      select: {
+        id: true,
+        name: true,
+        location: {
+          select: { id: true, name: true, city: true, latitude: true, longitude: true },
+        },
+        tenant: { select: AGENCY_SELECT },
+      },
+      orderBy: [{ tenant: { name: 'asc' } }, { name: 'asc' }, { id: 'asc' }],
+    });
+  }
+
   /** The resolved pickup branch row for an agency under a city filter. */
   toOfferBranch(row: OfferBranchRow): OfferBranch {
     return {
@@ -165,4 +190,21 @@ export class MarketplaceRepository {
       distanceKm: null,
     };
   }
+}
+
+export interface MarketplaceBranchLocationRow {
+  id: string;
+  name: string;
+  location: {
+    id: string;
+    name: string;
+    city: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  };
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+  };
 }

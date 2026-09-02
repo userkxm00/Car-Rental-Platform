@@ -1,9 +1,12 @@
 import {
   compareOffers,
   matchesFeatures,
+  nearestByDistance,
   offerDistanceKm,
   parseSearchQuery,
+  withinBbox,
   withinPriceRange,
+  withinRadiusKm,
 } from './search-rules';
 
 const NOW = new Date('2026-09-01T10:00:00.000Z');
@@ -154,5 +157,60 @@ describe('filter helpers (07-B05/B06)', () => {
     expect(distance).not.toBeNull();
     expect(distance as number).toBeGreaterThan(110);
     expect(distance as number).toBeLessThan(113);
+  });
+});
+
+describe('spatial proximity parsing (07-C09)', () => {
+  const base = { start: FUTURE_START, end: FUTURE_END };
+
+  it('parses a valid radius with coordinates and echoes it', () => {
+    const parsed = parseSearchQuery({ ...base, lat: '35.7', lng: '-0.63', radiusKm: '12.5' }, NOW);
+    expect(parsed.radiusKm).toBe(12.5);
+    expect(parsed.lat).toBe(35.7);
+  });
+
+  it('rejects out-of-bounds and coordinate-less radii', () => {
+    expect(codeOf({ ...base, lat: '35.7', lng: '-0.63', radiusKm: '0' })).toBe('INVALID_RADIUS');
+    expect(codeOf({ ...base, lat: '35.7', lng: '-0.63', radiusKm: '501' })).toBe('INVALID_RADIUS');
+    expect(codeOf({ ...base, lat: '35.7', lng: '-0.63', radiusKm: 'abc' })).toBe('INVALID_RADIUS');
+    expect(codeOf({ ...base, radiusKm: '10' })).toBe('RADIUS_REQUIRES_COORDINATES');
+  });
+
+  it('parses a valid bbox and rejects malformed bounds', () => {
+    const parsed = parseSearchQuery({ ...base, bbox: '-5.5, 34, 1.25, 37' }, NOW);
+    expect(parsed.bbox).toEqual({ west: -5.5, south: 34, east: 1.25, north: 37 });
+
+    expect(codeOf({ ...base, bbox: '1,2' })).toBe('INVALID_BBOX');
+    expect(codeOf({ ...base, bbox: '1,2,3,x' })).toBe('INVALID_BBOX');
+    expect(codeOf({ ...base, bbox: '5,34,1,37' })).toBe('INVALID_BBOX'); // west >= east
+    expect(codeOf({ ...base, bbox: '-5,38,-1,37' })).toBe('INVALID_BBOX'); // south >= north
+    expect(codeOf({ ...base, bbox: '-181,34,1,37' })).toBe('INVALID_BBOX');
+  });
+
+  it('applies inclusive radius membership and fails closed without distance', () => {
+    expect(withinRadiusKm(9.9, 10)).toBe(true);
+    expect(withinRadiusKm(10, 10)).toBe(true);
+    expect(withinRadiusKm(10.1, 10)).toBe(false);
+    expect(withinRadiusKm(null, 10)).toBe(false);
+    expect(withinRadiusKm(500, null)).toBe(true);
+  });
+
+  it('applies inclusive bbox membership and fails closed without coordinates', () => {
+    const bbox = { west: -5, south: 34, east: 1, north: 37 };
+    expect(withinBbox(35.7, -0.63, bbox)).toBe(true);
+    expect(withinBbox(34, -5, bbox)).toBe(true); // edge-inclusive
+    expect(withinBbox(36.75, 3.06, bbox)).toBe(false);
+    expect(withinBbox(null, null, bbox)).toBe(false);
+    expect(withinBbox(35.7, -0.63, null)).toBe(true);
+  });
+
+  it('picks the nearest candidate deterministically', () => {
+    const candidates = [
+      { id: 'far', name: 'Far', latitude: 35.9, longitude: -0.7 },
+      { id: 'near', name: 'Near', latitude: 35.7, longitude: -0.63 },
+    ];
+    const picked = nearestByDistance(candidates, 35.69, -0.65, (candidate) => candidate);
+    expect(picked?.id).toBe('near');
+    expect(nearestByDistance([], 35, -0.6, (candidate) => candidate)).toBeNull();
   });
 });

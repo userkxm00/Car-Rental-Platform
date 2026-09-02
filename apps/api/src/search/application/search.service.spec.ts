@@ -63,6 +63,7 @@ function baseRepo(): FakeRepository {
     findBranchAtLocation: jest.fn(),
     findBranchesByCity: jest.fn(),
     listOfferVehicles: jest.fn(),
+    listBranchLocations: jest.fn(),
     toOfferBranch: jest.fn(),
   };
 }
@@ -125,6 +126,11 @@ describe('SearchService (07-B)', () => {
       pricing: { totalMinor: 4500 },
     });
     expect(response.items[0].pickupBranch?.location.city).toBe('Oran');
+    // Category-scoped rate plans must apply: the pricing port receives
+    // both the vehicle and its category.
+    expect(pricing.computeQuotePricing).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'VEHICLE', vehicleId: 'vehicle-1', categoryId: 'cat-1' }),
+    );
   });
 
   it('excludes unpriced vehicles (no rate plan applies)', async () => {
@@ -286,5 +292,175 @@ describe('SearchService (07-B)', () => {
     const secondPage = await service.searchOffers({ ...QUERY, limit: '2', page: '2' }, NOW);
     expect(secondPage.items.map((item) => item.pricing.totalMinor)).toEqual([3000]);
     expect(secondPage.filters.priceMinMinor).toBeNull();
+  });
+
+  it('applies radius proximity — far pickup points are excluded (07-C09)', async () => {
+    const repo = baseRepo();
+    const availability = baseAvailability();
+    repo.listEnabledAgencies.mockResolvedValue([
+      { id: 'tenant-1', name: 'Oran', slug: 'oran' },
+      { id: 'tenant-2', name: 'Algiers', slug: 'algiers' },
+    ]);
+    const summaries = (branchId: string | null) => [
+      { id: 'vehicle-1', categoryId: 'c', currentBranchId: branchId, make: 'M', model: 'm', year: 2024, plateNumber: 'p' },
+    ];
+    availability.listAvailableVehicles.mockImplementation((tenantId: string) =>
+      Promise.resolve({ start: 'x', end: 'y', vehicles: summaries(tenantId === 'tenant-1' ? 'branch-1' : 'branch-2'), total: 1 }),
+    );
+    repo.listOfferVehicles.mockImplementation((tenantId: string) =>
+      Promise.resolve([
+        vehicleRow(
+          tenantId === 'tenant-1'
+            ? {}
+            : {
+                id: 'vehicle-2',
+                currentBranchId: 'branch-2',
+                currentBranch: branchRow({
+                  id: 'branch-2',
+                  location: { id: 'loc-2', city: 'Algiers', latitude: 36.75, longitude: 3.06 },
+                }),
+              },
+        ),
+      ]),
+    );
+    const service = makeService(repo, availability, basePricing());
+
+    const response = await service.searchOffers({ ...QUERY, lat: '35.7', lng: '-0.63', radiusKm: '10' }, NOW);
+    expect(response.total).toBe(1);
+    expect(response.items[0].agency.id).toBe('tenant-1');
+    expect(response.filters.radiusKm).toBe(10);
+    expect(response.items[0].pickupBranch?.location.city).toBe('Oran');
+  });
+
+  it('applies viewport bbox filtering (07-C09)', async () => {
+    const repo = baseRepo();
+    const availability = baseAvailability();
+    repo.listEnabledAgencies.mockResolvedValue([
+      { id: 'tenant-1', name: 'Oran', slug: 'oran' },
+      { id: 'tenant-2', name: 'Algiers', slug: 'algiers' },
+    ]);
+    availability.listAvailableVehicles.mockImplementation((tenantId: string) =>
+      Promise.resolve({
+        start: 'x',
+        end: 'y',
+        vehicles: [
+          { id: 'vehicle-1', categoryId: 'c', currentBranchId: tenantId === 'tenant-1' ? 'branch-1' : 'branch-2', make: 'M', model: 'm', year: 2024, plateNumber: 'p' },
+        ],
+        total: 1,
+      }),
+    );
+    repo.listOfferVehicles.mockImplementation((tenantId: string) =>
+      Promise.resolve([
+        vehicleRow(
+          tenantId === 'tenant-1'
+            ? {}
+            : {
+                id: 'vehicle-2',
+                currentBranchId: 'branch-2',
+                currentBranch: branchRow({
+                  id: 'branch-2',
+                  location: { id: 'loc-2', city: 'Algiers', latitude: 36.75, longitude: 3.06 },
+                }),
+              },
+        ),
+      ]),
+    );
+    const service = makeService(repo, availability, basePricing());
+
+    const response = await service.searchOffers({ ...QUERY, bbox: '-5,34,1,37' }, NOW);
+    expect(response.total).toBe(1);
+    expect(response.items[0].agency.id).toBe('tenant-1');
+    expect(response.filters.bbox).toEqual({ west: -5, south: 34, east: 1, north: 37 });
+  });
+
+  it('pins the nearest branch when a city filter coexists with coordinates (07-C09)', async () => {
+    const repo = baseRepo();
+    const availability = baseAvailability();
+    repo.listEnabledAgencies.mockResolvedValue([{ id: 'tenant-1', name: 'A', slug: 'a' }]);
+    repo.findBranchesByCity.mockResolvedValue([
+      branchRow({ id: 'branch-far', name: 'Far', location: { id: 'loc-far', city: 'Oran', latitude: 35.9, longitude: -0.7 } }),
+      branchRow({ id: 'branch-near', name: 'Near', location: { id: 'loc-near', city: 'Oran', latitude: 35.7, longitude: -0.63 } }),
+    ]);
+    availability.listAvailableVehicles.mockResolvedValue({
+      start: 'x',
+      end: 'y',
+      vehicles: [{ id: 'vehicle-1', categoryId: 'c', currentBranchId: 'branch-near', make: 'M', model: 'm', year: 2024, plateNumber: 'p' }],
+      total: 1,
+    });
+    repo.listOfferVehicles.mockResolvedValue([vehicleRow()]);
+    const service = makeService(repo, availability, basePricing());
+
+    const response = await service.searchOffers({ ...QUERY, pickupCity: 'Oran', lat: '35.69', lng: '-0.65' }, NOW);
+    expect(response.items[0].pickupBranch?.id).toBe('branch-near');
+    expect(availability.listAvailableVehicles).toHaveBeenCalledWith(
+      'tenant-1',
+      { start: expect.any(Date) as Date, end: expect.any(Date) as Date },
+      { pickupBranchId: 'branch-near' },
+      { categoryId: undefined },
+    );
+  });
+
+  it('fails closed on missing branch coordinates under spatial filters (07-C09)', async () => {
+    const repo = baseRepo();
+    const availability = baseAvailability();
+    repo.listEnabledAgencies.mockResolvedValue([{ id: 'tenant-1', name: 'A', slug: 'a' }]);
+    availability.listAvailableVehicles.mockResolvedValue({
+      start: 'x',
+      end: 'y',
+      vehicles: [{ id: 'vehicle-1', categoryId: 'c', currentBranchId: 'branch-1', make: 'M', model: 'm', year: 2024, plateNumber: 'p' }],
+      total: 1,
+    });
+    repo.listOfferVehicles.mockResolvedValue([
+      vehicleRow({
+        currentBranch: branchRow({ location: { id: 'loc-1', city: null, latitude: null, longitude: null } }),
+      }),
+    ]);
+    const service = makeService(repo, availability, basePricing());
+    const response = await service.searchOffers({ ...QUERY, lat: '35.7', lng: '-0.63', radiusKm: '10' }, NOW);
+    expect(response.total).toBe(0);
+  });
+
+  it('maps the public locations feed and skips rows without coordinates (07-C05)', async () => {
+    const repo = baseRepo();
+    repo.listBranchLocations.mockResolvedValue([
+      {
+        id: 'branch-1',
+        name: 'Centre',
+        location: { id: 'loc-1', name: 'Oran Downtown', city: 'Oran', latitude: 35.7, longitude: -0.63 },
+        tenant: { id: 'tenant-1', name: 'Agence Oran', slug: 'agence-oran' },
+      },
+      {
+        id: 'branch-2',
+        name: 'NoCoords',
+        location: { id: 'loc-2', name: 'Unknown', city: null, latitude: null, longitude: null },
+        tenant: { id: 'tenant-1', name: 'Agence Oran', slug: 'agence-oran' },
+      },
+    ]);
+    const service = makeService(repo, baseAvailability(), basePricing());
+    const response = await service.listLocations();
+    expect(response.total).toBe(1);
+    expect(response.items[0]).toEqual({
+      branch: { id: 'branch-1', name: 'Centre' },
+      location: { id: 'loc-1', name: 'Oran Downtown', city: 'Oran', latitude: 35.7, longitude: -0.63 },
+      agency: { id: 'tenant-1', name: 'Agence Oran', slug: 'agence-oran' },
+    });
+  });
+
+  it('maps spatial validation failures to the stable 409 envelope (07-C09)', async () => {
+    const repo = baseRepo();
+    const service = makeService(repo, baseAvailability(), basePricing());
+    const radiusWithoutCoords = await service
+      .searchOffers({ ...QUERY, radiusKm: '10' }, NOW)
+      .then(() => null)
+      .catch((error: ConflictException) => error);
+    expect((radiusWithoutCoords as ConflictException).getResponse()).toMatchObject({
+      code: 'RADIUS_REQUIRES_COORDINATES',
+    });
+
+    const malformedBbox = await service
+      .searchOffers({ ...QUERY, bbox: '1,2' }, NOW)
+      .then(() => null)
+      .catch((error: ConflictException) => error);
+    expect((malformedBbox as ConflictException).getResponse()).toMatchObject({ code: 'INVALID_BBOX' });
   });
 });

@@ -2,10 +2,13 @@ import { FEATURE_CATALOG } from '../../fleet/domain/feature-catalog';
 import { isValidInterval } from '../../availability/domain/interval';
 import { haversineDistanceKm } from '../../pricing/domain/commercial-rules';
 import {
+  SearchBoundingBox,
   SearchErrorCode,
   SEARCH_LIMIT_DEFAULT,
   SEARCH_LIMIT_MAX,
   SEARCH_MAX_INTERVAL_DAYS,
+  SEARCH_RADIUS_KM_MAX,
+  SEARCH_RADIUS_KM_MIN,
   SEARCH_SORTS,
   SearchOffersQuery,
   SearchSortValue,
@@ -32,6 +35,8 @@ export interface ParsedSearchQuery {
   priceMaxMinor: number | null;
   lat: number | null;
   lng: number | null;
+  radiusKm: number | null;
+  bbox: SearchBoundingBox | null;
   sort: SearchSortValue;
   page: number;
   limit: number;
@@ -147,6 +152,55 @@ function parseCoordinates(
   throw new RangeError(`${SearchErrorCode.INVALID_COORDINATES}: lat and lng must be provided together.`);
 }
 
+/** 07-C09: radius in km — bounded, finite, and only meaningful with coordinates. */
+function parseRadiusKm(value: unknown, lat: number | null): number | null {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim()) : NaN;
+  if (!Number.isFinite(numeric) || numeric < SEARCH_RADIUS_KM_MIN || numeric > SEARCH_RADIUS_KM_MAX) {
+    throw new RangeError(
+      `${SearchErrorCode.INVALID_RADIUS}: radiusKm must be a number between ${SEARCH_RADIUS_KM_MIN} and ${SEARCH_RADIUS_KM_MAX}.`,
+    );
+  }
+  if (lat === null) {
+    throw new RangeError(
+      `${SearchErrorCode.RADIUS_REQUIRES_COORDINATES}: radiusKm requires lat and lng.`,
+    );
+  }
+  return numeric;
+}
+
+/**
+ * 07-C09: viewport bounds "west,south,east,north" in decimal degrees.
+ * Rejects inverted or degenerate rectangles (antimeridian-spanning
+ * viewports are out of scope for R1 — Algeria-centric market).
+ */
+function parseBbox(value: unknown): SearchBoundingBox | null {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new RangeError(`${SearchErrorCode.INVALID_BBOX}: bbox must be a "west,south,east,north" string.`);
+  }
+  const parts = value.split(',');
+  if (parts.length !== 4) {
+    throw new RangeError(`${SearchErrorCode.INVALID_BBOX}: bbox must have exactly four values: west,south,east,north.`);
+  }
+  const numbers = parts.map((part) => Number(part.trim()));
+  if (numbers.some((numeric) => !Number.isFinite(numeric))) {
+    throw new RangeError(`${SearchErrorCode.INVALID_BBOX}: bbox values must be numbers.`);
+  }
+  const [west, south, east, north] = numbers as [number, number, number, number];
+  if (west < -180 || west > 180 || east < -180 || east > 180 || south < -90 || south > 90 || north < -90 || north > 90) {
+    throw new RangeError(`${SearchErrorCode.INVALID_BBOX}: bbox values are outside valid coordinate ranges.`);
+  }
+  if (west >= east || south >= north) {
+    throw new RangeError(`${SearchErrorCode.INVALID_BBOX}: bbox must satisfy west < east and south < north.`);
+  }
+  return { west, south, east, north };
+}
+
 function parseFeatures(value: unknown): string[] {
   const text = parseText(value, SearchErrorCode.INVALID_FEATURES, 'features');
   if (text === null) {
@@ -185,6 +239,8 @@ export function parseSearchQuery(query: SearchOffersQuery, now: Date): ParsedSea
   }
   const seats = parseBoundedInteger(query.seats, SearchErrorCode.INVALID_SEATS, 'seats', 1, 50);
   const { lat, lng } = parseCoordinates(query.lat, query.lng);
+  const radiusKm = parseRadiusKm(query.radiusKm, lat);
+  const bbox = parseBbox(query.bbox);
 
   const sortValue = parseText(query.sort, SearchErrorCode.INVALID_SORT, 'sort');
   const sort: SearchSortValue = sortValue === null ? 'price_asc' : (sortValue as SearchSortValue);
@@ -239,6 +295,8 @@ export function parseSearchQuery(query: SearchOffersQuery, now: Date): ParsedSea
     priceMaxMinor: priceMax,
     lat,
     lng,
+    radiusKm,
+    bbox,
     sort,
     page,
     limit,
@@ -325,4 +383,61 @@ export function matchesFeatures(vehicleFeatures: readonly string[], requested: r
   }
   const set = new Set(vehicleFeatures);
   return requested.some((feature) => set.has(feature));
+}
+
+/**
+ * 07-C09: inclusive radius membership. Branches without a computable
+ * distance fail closed — proximity cannot be proven for them.
+ */
+export function withinRadiusKm(distanceKm: number | null, radiusKm: number | null): boolean {
+  if (radiusKm === null) {
+    return true;
+  }
+  return distanceKm !== null && distanceKm <= radiusKm;
+}
+
+/** 07-C09: inclusive viewport membership; missing coordinates fail closed. */
+export function withinBbox(lat: number | null, lng: number | null, bbox: SearchBoundingBox | null): boolean {
+  if (bbox === null) {
+    return true;
+  }
+  if (lat === null || lng === null) {
+    return false;
+  }
+  return lat >= bbox.south && lat <= bbox.north && lng >= bbox.west && lng <= bbox.east;
+}
+
+/**
+ * 07-C09: nearest-city-branch selection — when a city filter coexists
+ * with coordinates, the map/list experience should pin the closest
+ * matching pickup point instead of an arbitrary one. Deterministic:
+ * distance asc → name asc → id asc.
+ */
+export function nearestByDistance<T extends { name: string; id: string }>(
+  candidates: T[],
+  lat: number | null,
+  lng: number | null,
+  locationOf: (candidate: T) => { latitude: number | null; longitude: number | null },
+): T | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+  const located = candidates
+    .map((candidate) => ({
+      candidate,
+      distance: offerDistanceKm(lat, lng, locationOf(candidate).latitude, locationOf(candidate).longitude),
+    }))
+    .sort((a, b) => {
+      const aDistance = a.distance ?? Number.POSITIVE_INFINITY;
+      const bDistance = b.distance ?? Number.POSITIVE_INFINITY;
+      if (aDistance !== bDistance) {
+        return aDistance - bDistance;
+      }
+      const byName = a.candidate.name.localeCompare(b.candidate.name);
+      if (byName !== 0) {
+        return byName;
+      }
+      return a.candidate.id.localeCompare(b.candidate.id);
+    });
+  return located[0]?.candidate ?? null;
 }

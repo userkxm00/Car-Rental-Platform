@@ -33,6 +33,9 @@ export const SearchErrorCode = {
   INVALID_LOCATION_QUERY: 'INVALID_LOCATION_QUERY',
   DISTANCE_REQUIRES_COORDINATES: 'DISTANCE_REQUIRES_COORDINATES',
   INVALID_COORDINATES: 'INVALID_COORDINATES',
+  INVALID_RADIUS: 'INVALID_RADIUS',
+  RADIUS_REQUIRES_COORDINATES: 'RADIUS_REQUIRES_COORDINATES',
+  INVALID_BBOX: 'INVALID_BBOX',
 } as const;
 
 export type SearchErrorCodeValue = (typeof SearchErrorCode)[keyof typeof SearchErrorCode];
@@ -53,6 +56,10 @@ export interface SearchOffersQuery {
   priceMaxMinor?: unknown;
   lat?: unknown;
   lng?: unknown;
+  /** 07-C09: proximity filter — pickup branch must lie within radiusKm of (lat, lng). */
+  radiusKm?: unknown;
+  /** 07-C09: viewport filter — "west,south,east,north" decimal degrees. */
+  bbox?: unknown;
   sort?: unknown;
   page?: unknown;
   limit?: unknown;
@@ -66,6 +73,9 @@ export const SEARCH_LIMIT_DEFAULT = 20;
 export const SEARCH_LIMIT_MAX = 50;
 /** R1 guard: search intervals beyond 90 days are rejected (07-B03). */
 export const SEARCH_MAX_INTERVAL_DAYS = 90;
+/** 07-C09: proximity radius bounds (km). */
+export const SEARCH_RADIUS_KM_MIN = 0.5;
+export const SEARCH_RADIUS_KM_MAX = 500;
 
 export interface AgencySummary {
   id: string;
@@ -109,6 +119,14 @@ export interface SearchOffer {
   pricing: QuotePricingPayload;
 }
 
+/** 07-C09: viewport bounds — inclusive decimal-degree rectangle. */
+export interface SearchBoundingBox {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
 export interface SearchOffersResponse {
   items: SearchOffer[];
   total: number;
@@ -131,5 +149,33 @@ export interface SearchOffersResponse {
     priceMaxMinor: number | null;
     lat: number | null;
     lng: number | null;
+    radiusKm: number | null;
+    bbox: SearchBoundingBox | null;
   };
+}
+
+/**
+ * 07-C05/07-C06: public pickup-point feed for marketplace map markers.
+ * Branches (pickup/parking points) of participating agencies — pins show
+ * pickup locations, never exact live vehicle positions (privacy boundary
+ * in docs/07).
+ */
+export interface MarketplaceBranchLocation {
+  branch: {
+    id: string;
+    name: string;
+  };
+  location: {
+    id: string;
+    name: string;
+    city: string | null;
+    latitude: number;
+    longitude: number;
+  };
+  agency: AgencySummary;
+}
+
+export interface SearchLocationsResponse {
+  items: MarketplaceBranchLocation[];
+  total: number;
 }

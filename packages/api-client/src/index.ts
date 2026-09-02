@@ -7,3 +7,13 @@ export {
   VehicleImageDto,
   VehicleStatus,
 } from './endpoints/fleet';
+export {
+  createSearchApi,
+  MarketplaceBranchLocationDto,
+  SearchBoundingBox,
+  SearchLocationsResponseDto,
+  SearchOfferDto,
+  SearchOffersQueryInput,
+  SearchOffersResponseDto,
+  SearchSortValue,
+} from './endpoints/search';

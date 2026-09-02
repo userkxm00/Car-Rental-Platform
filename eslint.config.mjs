@@ -67,6 +67,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/customer-web/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: {
+        project: './apps/customer-web/tsconfig.eslint.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['packages/ui/**/*.{ts,tsx}'],
     languageOptions: {
       globals: { ...globals.browser },
@@ -90,6 +100,7 @@ export default tseslint.config(
         project: [
           './packages/config/tsconfig.eslint.json',
           './packages/api-client/tsconfig.eslint.json',
+          './packages/maps/tsconfig.eslint.json',
         ],
         tsconfigRootDir: import.meta.dirname,
       },
