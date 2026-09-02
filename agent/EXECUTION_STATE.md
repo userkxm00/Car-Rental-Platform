@@ -6,16 +6,17 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-07`
-- Current workstream: `07-A Customer Identity/Profile`
-- Current task: `07-A07` (search history baseline) — 07-A sweep implemented; docs/commit pending
-- Last completed task: `07-A01…A07` implementation verified (unit 51, e2e 17); final docs/commit in progress
+- Current workstream: `07-C Maps` (next)
+- Current task: `07-C01`
+- Last completed task: `07-B11` (marketplace search — empty result contract) — 07-B complete, committed + pushed
 - Last completed phase: `PHASE-06 Pricing Engine`
 - Current attempt: `1`
-- Last validation: 07-A sweep — build 0 → typecheck 0 → lint 0 (all new code) → unit 407 (36 suites) → e2e 192 (24 suites incl. new `customers` 17) — 2026-09-01
-- Last known good commit: `ef938ca` on `arena/01a05097-car-rental-platform` (pushed; origin current)
+- Last validation: 07-B sweep — typecheck 0 → lint 0 (all new `src/search/**` + `test/search.e2e-spec.ts`) → unit 427 (38 suites) → e2e 199 (25 suites incl. new `search` 7) — 2026-09-02
+- Last known good commit: `57f073c` on `arena/01a05097-car-rental-platform` (pushed; 07-B feat on origin)
+- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await); not part of 07-B delta, will be cleaned in a dedicated lint sweep
 - Blocker: none
-- Next action: record 07-A evidence → commit + push → continue to 07-B (search contract/location search) automatically
-- Last updated: 2026-09-01
+- Next action: PHASE-07 / 07-C — maps & location surfaces (07-C01), then 07-D Agency Public Profiles, 07-E Customer Booking Portal, close at gate 07-05
+- Last updated: 2026-09-02
 
 ## Canonical execution model
 
@@ -66,7 +67,11 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-06 / 06-D / 06-D01`
+`PHASE-07 / 07-C / 07-C01`
+
+## Phase 07 progress (Customer Platform & Marketplace)
+
+Workstream 07-A Customer Identity/Profile is complete (checkpoint commit `490f522`). Workstream 07-B Marketplace Search is complete: `GET /api/v1/search/offers` (public, rate-limited 60/min), pure `search-rules` validation (12 unit tests), `SearchService` composition (7 unit tests), integration `test/search.e2e-spec.ts` (7 tests), migrations #18 (marketplace search indexes) and #19 (`vehicles.currentBranchId` FK) applied via the direct-pg recipe. Remaining in phase: 07-C Maps, 07-D Agency Public Profiles, 07-E Customer Booking Portal; phase gate 07-05.
 
 ## Phase 05 result (Booking Engine)
 
