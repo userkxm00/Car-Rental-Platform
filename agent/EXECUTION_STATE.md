@@ -11,11 +11,11 @@ This file is the persistent checkpoint for autonomous implementation.
 - Last completed task: `07-E11` (customer support/contact surface) — 07-E01…E11 implemented, committed locally
 - Last completed phase: `PHASE-06 Pricing Engine`
 - Current attempt: `1`
-- Last validation: 07-E implementation sweep — API typecheck 0; lint 0 on all touched src/test files (portal spec rewritten to mock handles; known 4-spec debt untouched); unit 467/467 (40 suites); e2e 216/216 (27 suites incl. new `me-portal` 8); api-client build 0; ui build 0 (Alert success tone); customer-web tsc 0, lint 0, tests 41/41, production build OK — 2026-09-02
-- Last known good commit: `9ca8cd1` (07-E feat, uncommitted at origin; push pending) on `arena/01a05097-car-rental-platform`
+- Last validation: 07-E12 gate sweep after the category-pricing repair (`699d6ec`) — API typecheck 0; lint 0 on all touched src/test files; unit 467/467 (40 suites); e2e 216/216 (27 suites incl. new `me-portal` 8); api-client build 0; ui build 0; customer-web tsc 0, lint 0, tests 41/41, production build OK; live preview smoke of the full portal flow over HTTP (quote priced via category-scoped plan + 20000 deposit, customer ensure, DRAFT booking, confirm, list, CUSTOMER cancel, unauthenticated 401) — 2026-09-02
+- Last known good commit: `699d6ec` (pricing repair; 07-E feat `9ca8cd1` + docs at origin pending push) on `arena/01a05097-car-rental-platform`
 - Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await); not part of 07-C delta, will be cleaned in a dedicated lint sweep
 - Blocker: none
-- Next action: 07-E12 gate — live preview smoke of the portal flow (me/quotes → ensure → bookings → cancel) against `car_rental_preview` (apply migration #20 to the preview DB, restart API + customer-web), then close PHASE-07 at gate 07-05 and start PHASE-08
+- Next action: push the 07-E commits; close PHASE-07 at gate 07-05 (07-E12 done — implementation, verification and live smoke all green); start PHASE-08 Contracts & Documents (08-A01)
 - Last updated: 2026-09-02
 
 ## Canonical execution model
