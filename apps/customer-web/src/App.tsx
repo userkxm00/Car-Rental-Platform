@@ -6,6 +6,9 @@ import { AppShell, Select } from '@kavriqo/ui';
 import { applyDocumentDirection } from './i18n';
 import { SUPPORTED_LOCALES } from './i18n/resources';
 import { SearchPage } from './search/SearchPage';
+import { AgencyFleetPage } from './profile/AgencyFleetPage';
+import { AgencyProfilePage } from './profile/AgencyProfilePage';
+import { VehicleDetailPage } from './profile/VehicleDetailPage';
 
 function Topbar(): ReactNode {
   const { t, i18n } = useTranslation();
@@ -42,6 +45,9 @@ function AppRoutes(): ReactNode {
   return (
     <Routes>
       <Route path="/" element={<SearchPage />} />
+      <Route path="/:slug" element={<AgencyProfilePage />} />
+      <Route path="/:slug/vehicles" element={<AgencyFleetPage />} />
+      <Route path="/:slug/vehicles/:vehicleId" element={<VehicleDetailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

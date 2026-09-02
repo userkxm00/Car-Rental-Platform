@@ -77,6 +77,11 @@ export function localInputValue(days: number, hour = 9): string {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
 }
 
+/** Default bookable window (tomorrow → +2 days) as ISO instants. */
+export function defaultIntervalIso(): { start: string; end: string } {
+  return { start: new Date(localInputValue(1)).toISOString(), end: new Date(localInputValue(3)).toISOString() };
+}
+
 export function initialState(): MarketplaceState {
   return {
     form: {

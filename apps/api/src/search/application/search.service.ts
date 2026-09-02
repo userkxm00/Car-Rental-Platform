@@ -103,6 +103,11 @@ export class SearchService {
       );
 
       for (const row of rows) {
+        // 07-D09: single-vehicle offer detail reuses the full eligibility
+        // pipeline (availability, blocks, pricing) with a hard row filter.
+        if (parsed.vehicleId !== null && row.id !== parsed.vehicleId) {
+          continue;
+        }
         const pricing = await this.priceOffer(agency.id, row, parsed, pickupBranch);
         if (!pricing) {
           continue;
@@ -169,6 +174,7 @@ export class SearchService {
         pickupLocationId: parsed.pickupLocationId,
         pickupCity: parsed.pickupCity,
         agencyId: parsed.agencyId,
+        vehicleId: parsed.vehicleId,
         categoryId: parsed.categoryId,
         transmission: parsed.transmission,
         fuelType: parsed.fuelType,

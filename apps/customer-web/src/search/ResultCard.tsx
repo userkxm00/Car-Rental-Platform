@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { SearchOfferDto } from '@kavriqo/api-client';
 
@@ -10,11 +11,13 @@ import type { SearchOfferDto } from '@kavriqo/api-client';
 export interface ResultCardProps {
   offer: SearchOfferDto;
   selected: boolean;
+  /** 07-D09: link to the vehicle offer detail page. */
+  detailHref?: string;
   onSelect: () => void;
   onHover: (hovered: boolean) => void;
 }
 
-export function ResultCard({ offer, selected, onSelect, onHover }: ResultCardProps): React.JSX.Element {
+export function ResultCard({ offer, selected, detailHref, onSelect, onHover }: ResultCardProps): React.JSX.Element {
   const { t } = useTranslation();
   const category = offer.vehicle.category;
   const priceMinor = offer.pricing.totalMinor;
@@ -66,6 +69,15 @@ export function ResultCard({ offer, selected, onSelect, onHover }: ResultCardPro
         <p className="kv-result-card__features">
           {category.features.slice(0, 4).map((feature) => t(`search.features.${feature}`)).join(' · ')}
         </p>
+      ) : null}
+      {detailHref ? (
+        <Link
+          className="kv-result-card__details"
+          to={detailHref}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {t('profile.availableCars')} →
+        </Link>
       ) : null}
     </article>
   );

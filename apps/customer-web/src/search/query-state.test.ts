@@ -25,6 +25,7 @@ function offerResponse(items: SearchOffersResponseDto['items'], total = items.le
       pickupLocationId: null,
       pickupCity: null,
       agencyId: null,
+      vehicleId: null,
       categoryId: null,
       transmission: null,
       fuelType: null,

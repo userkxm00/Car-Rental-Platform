@@ -26,6 +26,7 @@ export interface ParsedSearchQuery {
   pickupLocationId: string | null;
   pickupCity: string | null;
   agencyId: string | null;
+  vehicleId: string | null;
   categoryId: string | null;
   transmission: string | null;
   fuelType: string | null;
@@ -286,6 +287,7 @@ export function parseSearchQuery(query: SearchOffersQuery, now: Date): ParsedSea
     pickupLocationId,
     pickupCity,
     agencyId: parseOptionalUuid(query.agencyId, SearchErrorCode.INVALID_LOCATION_QUERY, 'agencyId'),
+    vehicleId: parseOptionalUuid(query.vehicleId, SearchErrorCode.INVALID_VEHICLE_ID, 'vehicleId'),
     categoryId: parseOptionalUuid(query.categoryId, SearchErrorCode.INVALID_LOCATION_QUERY, 'categoryId'),
     transmission: parseText(query.transmission, SearchErrorCode.INVALID_LOCATION_QUERY, 'transmission'),
     fuelType: parseText(query.fuelType, SearchErrorCode.INVALID_LOCATION_QUERY, 'fuelType'),

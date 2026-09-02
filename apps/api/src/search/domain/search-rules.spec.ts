@@ -103,6 +103,17 @@ describe('search query parsing (07-B01/B03)', () => {
     expect(parsed.features).toEqual(['air_conditioning', 'gps_navigation']);
     expect(parsed.priceMinMinor).toBe(1000);
   });
+
+  it('parses the vehicleId filter (07-D09) and rejects malformed values', () => {
+    const parsed = parseSearchQuery(
+      { start: FUTURE_START, end: FUTURE_END, vehicleId: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' },
+      NOW,
+    );
+    expect(parsed.vehicleId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(parseSearchQuery({ start: FUTURE_START, end: FUTURE_END }, NOW).vehicleId).toBeNull();
+    expect(codeOf({ start: FUTURE_START, end: FUTURE_END, vehicleId: 'nope' })).toBe('INVALID_VEHICLE_ID');
+    expect(codeOf({ start: FUTURE_START, end: FUTURE_END, vehicleId: 42 })).toBe('INVALID_VEHICLE_ID');
+  });
 });
 
 describe('offer ordering (07-B10)', () => {

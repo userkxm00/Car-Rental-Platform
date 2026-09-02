@@ -34,7 +34,13 @@ function parseErrorCode(error: unknown): string {
   return typeof code === 'string' ? code : 'UNKNOWN';
 }
 
-export function SearchPage(): React.JSX.Element {
+export interface SearchPageProps {
+  /** 07-D08: when set, the page searches this agency's fleet instead of the whole marketplace. */
+  agencySlug?: string;
+  agencyName?: string;
+}
+
+export function SearchPage({ agencySlug, agencyName }: SearchPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const [state, dispatch] = useReducer(marketplaceReducer, undefined, initialState);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -77,8 +83,8 @@ export function SearchPage(): React.JSX.Element {
       return;
     }
     let cancelled = false;
-    api
-      .offers(query)
+    const request = agencySlug ? api.fleet(agencySlug, query) : api.offers(query);
+    request
       .then((results) => {
         if (!cancelled) {
           dispatch({ type: 'RESULTS_LOADED', results });
@@ -92,7 +98,7 @@ export function SearchPage(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [state.ui.lastQuery, api]);
+  }, [state.ui.lastQuery, api, agencySlug]);
 
   function submit(form: typeof state.form, viewport: Viewport | null): void {
     const query = buildSearchQuery(form, viewport);
@@ -177,12 +183,12 @@ export function SearchPage(): React.JSX.Element {
   return (
     <main className="kv-search-page">
       <section className="kv-search-hero">
-        <h1>{t('search.title')}</h1>
-        <p>{t('search.subtitle')}</p>
+        <h1>{agencySlug ? t('fleet.title', { agency: agencyName ?? agencySlug }) : t('search.title')}</h1>
+        <p>{agencySlug ? t('fleet.subtitle') : t('search.subtitle')}</p>
       </section>
 
       <section className="kv-search-form" aria-label={t('search.title')}>
-        {capabilities.autocomplete ? (
+        {agencySlug ? null : capabilities.autocomplete ? (
           <AutocompleteInput
             geocoding={providers.autocomplete}
             value={state.form.pickupCity ?? ''}
@@ -357,6 +363,7 @@ export function SearchPage(): React.JSX.Element {
                   <ResultCard
                     offer={offer}
                     selected={state.ui.selectedOfferIndex === index}
+                    detailHref={`/${offer.agency.slug}/vehicles/${offer.vehicle.id}?start=${encodeURIComponent(state.form.start)}&end=${encodeURIComponent(state.form.end)}`}
                     onSelect={() => dispatch({ type: 'OFFER_SELECTED', index })}
                     onHover={(hovered) => dispatch({ type: 'OFFER_HOVERED', index: hovered ? index : null })}
                   />

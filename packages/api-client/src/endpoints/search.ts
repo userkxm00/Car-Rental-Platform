@@ -11,6 +11,8 @@ export interface SearchOffersQueryInput {
   pickupLocationId?: string;
   pickupCity?: string;
   agencyId?: string;
+  /** 07-D09: restrict results to a single vehicle. */
+  vehicleId?: string;
   categoryId?: string;
   transmission?: string;
   fuelType?: string;
@@ -50,6 +52,7 @@ export interface SearchOffersResponseDto {
     pickupLocationId: string | null;
     pickupCity: string | null;
     agencyId: string | null;
+    vehicleId: string | null;
     categoryId: string | null;
     transmission: string | null;
     fuelType: string | null;
@@ -123,35 +126,39 @@ export interface SearchLocationsResponseDto {
   total: number;
 }
 
+/** Serializes the shared offer-query input (07-D08/D09 reuse the same shape). */
+export function searchQueryParams(query: SearchOffersQueryInput): Record<string, string | undefined> {
+  return {
+    start: query.start,
+    end: query.end,
+    pickupLocationId: query.pickupLocationId,
+    pickupCity: query.pickupCity,
+    agencyId: query.agencyId,
+    vehicleId: query.vehicleId,
+    categoryId: query.categoryId,
+    transmission: query.transmission,
+    fuelType: query.fuelType,
+    seats: query.seats === undefined ? undefined : String(query.seats),
+    features: query.features,
+    priceMinMinor: query.priceMinMinor === undefined ? undefined : String(query.priceMinMinor),
+    priceMaxMinor: query.priceMaxMinor === undefined ? undefined : String(query.priceMaxMinor),
+    lat: query.lat === undefined ? undefined : String(query.lat),
+    lng: query.lng === undefined ? undefined : String(query.lng),
+    radiusKm: query.radiusKm === undefined ? undefined : String(query.radiusKm),
+    bbox: query.bbox,
+    sort: query.sort,
+    page: query.page === undefined ? undefined : String(query.page),
+    limit: query.limit === undefined ? undefined : String(query.limit),
+  };
+}
+
 export function createSearchApi(client: ApiClient): {
   offers: (query: SearchOffersQueryInput) => Promise<SearchOffersResponseDto>;
   locations: () => Promise<SearchLocationsResponseDto>;
 } {
   return {
-    offers: (query) =>
-      client.get('/api/v1/search/offers', {
-        query: {
-          start: query.start,
-          end: query.end,
-          pickupLocationId: query.pickupLocationId,
-          pickupCity: query.pickupCity,
-          agencyId: query.agencyId,
-          categoryId: query.categoryId,
-          transmission: query.transmission,
-          fuelType: query.fuelType,
-          seats: query.seats === undefined ? undefined : String(query.seats),
-          features: query.features,
-          priceMinMinor: query.priceMinMinor === undefined ? undefined : String(query.priceMinMinor),
-          priceMaxMinor: query.priceMaxMinor === undefined ? undefined : String(query.priceMaxMinor),
-          lat: query.lat === undefined ? undefined : String(query.lat),
-          lng: query.lng === undefined ? undefined : String(query.lng),
-          radiusKm: query.radiusKm === undefined ? undefined : String(query.radiusKm),
-          bbox: query.bbox,
-          sort: query.sort,
-          page: query.page === undefined ? undefined : String(query.page),
-          limit: query.limit === undefined ? undefined : String(query.limit),
-        },
-      }),
+    offers: (query) => client.get('/api/v1/search/offers', { query: searchQueryParams(query) }),
+
     locations: () => client.get('/api/v1/search/locations'),
   };
 }

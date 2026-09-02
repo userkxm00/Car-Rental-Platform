@@ -36,6 +36,7 @@ export const SearchErrorCode = {
   INVALID_RADIUS: 'INVALID_RADIUS',
   RADIUS_REQUIRES_COORDINATES: 'RADIUS_REQUIRES_COORDINATES',
   INVALID_BBOX: 'INVALID_BBOX',
+  INVALID_VEHICLE_ID: 'INVALID_VEHICLE_ID',
 } as const;
 
 export type SearchErrorCodeValue = (typeof SearchErrorCode)[keyof typeof SearchErrorCode];
@@ -47,6 +48,8 @@ export interface SearchOffersQuery {
   pickupLocationId?: unknown;
   pickupCity?: unknown;
   agencyId?: unknown;
+  /** 07-D09: restrict results to a single vehicle (vehicle offer detail). */
+  vehicleId?: unknown;
   categoryId?: unknown;
   transmission?: unknown;
   fuelType?: unknown;
@@ -140,6 +143,7 @@ export interface SearchOffersResponse {
     pickupLocationId: string | null;
     pickupCity: string | null;
     agencyId: string | null;
+    vehicleId: string | null;
     categoryId: string | null;
     transmission: string | null;
     fuelType: string | null;

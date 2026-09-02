@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SearchOffersResponseDto } from '@kavriqo/api-client';
@@ -85,6 +86,7 @@ function offerResponse(page: number, total: number): SearchOffersResponseDto {
       pickupLocationId: null,
       pickupCity: null,
       agencyId: null,
+      vehicleId: null,
       categoryId: null,
       transmission: null,
       fuelType: null,
@@ -111,7 +113,9 @@ const LOCATIONS = [
 function renderPage(): void {
   render(
     <I18nextProvider i18n={i18n}>
-      <SearchPage />
+      <MemoryRouter>
+        <SearchPage />
+      </MemoryRouter>
     </I18nextProvider>,
   );
 }

@@ -133,6 +133,36 @@ describe('SearchService (07-B)', () => {
     );
   });
 
+  it('restricts results to a single vehicle when vehicleId is set (07-D09)', async () => {
+    const repo = baseRepo();
+    const availability = baseAvailability();
+    const pricing = basePricing(4500);
+    const vehicle2Id = '22222222-2222-4222-8222-222222222222';
+    repo.listEnabledAgencies.mockResolvedValue([{ id: 'tenant-1', name: 'Agence Oran', slug: 'agence-oran' }]);
+    availability.listAvailableVehicles.mockResolvedValue({
+      start: '2026-10-01T09:00:00.000Z',
+      end: '2026-10-05T09:00:00.000Z',
+      vehicles: [
+        { id: 'vehicle-1', categoryId: 'cat-1', currentBranchId: 'branch-1', make: 'Dacia', model: 'Logan', year: 2024, plateNumber: 'P-123' },
+        { id: vehicle2Id, categoryId: 'cat-1', currentBranchId: 'branch-1', make: 'Dacia', model: 'Sandero', year: 2024, plateNumber: 'P-456' },
+      ],
+      total: 2,
+    });
+    repo.listOfferVehicles.mockResolvedValue([
+      vehicleRow(),
+      vehicleRow({ id: vehicle2Id, make: 'Dacia', model: 'Sandero', plateNumber: 'P-456' }),
+    ]);
+    const service = makeService(repo, availability, pricing);
+
+    const response = await service.searchOffers({ ...QUERY, vehicleId: vehicle2Id }, NOW);
+
+    expect(response.total).toBe(1);
+    expect(response.items[0].vehicle.id).toBe(vehicle2Id);
+    expect(response.filters.vehicleId).toBe(vehicle2Id);
+    expect(pricing.computeQuotePricing).toHaveBeenCalledTimes(1);
+    expect(pricing.computeQuotePricing).toHaveBeenCalledWith(expect.objectContaining({ vehicleId: vehicle2Id }));
+  });
+
   it('excludes unpriced vehicles (no rate plan applies)', async () => {
     const repo = baseRepo();
     const availability = baseAvailability();

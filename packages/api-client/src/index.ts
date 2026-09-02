@@ -8,6 +8,19 @@ export {
   VehicleStatus,
 } from './endpoints/fleet';
 export {
+  AgencyBranchesResponseDto,
+  AgencyProfileDto,
+  AgencyProfilesApi,
+  createAgencyProfilesApi,
+  PublicBranchDto,
+  PublicImageUrlResponseDto,
+  PublicLocationSummaryDto,
+  PublicVehicleDetailDto,
+  PublicVehicleGalleryImageDto,
+  PublicVerificationStatus,
+  VehicleDetailResponseDto,
+} from './endpoints/agency-profiles';
+export {
   createSearchApi,
   MarketplaceBranchLocationDto,
   SearchBoundingBox,
