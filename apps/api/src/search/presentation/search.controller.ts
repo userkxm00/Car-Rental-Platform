@@ -1,0 +1,26 @@
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Public } from '../../auth/auth.guard';
+import { RateLimit, RateLimitGuard } from '../../security/rate-limit/rate-limit.guard';
+import { SearchService } from '../application/search.service';
+import { SearchOffersQuery, SearchOffersResponse } from '../domain/search-contract';
+
+/**
+ * Public marketplace search (07-B01).
+ *
+ * `GET /api/v1/search/offers` — cross-agency discovery open to browsing
+ * customers (docs/40). No membership applies: participating agencies opt
+ * in via `marketplaceEnabled`, and the response is strictly the public
+ * offer shape. Rate-limited against unauthenticated scraping.
+ */
+@Controller('search')
+export class SearchController {
+  constructor(private readonly service: SearchService) {}
+
+  @Get('offers')
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ windowMs: 60_000, max: 60 })
+  async searchOffers(@Query() query: SearchOffersQuery): Promise<SearchOffersResponse> {
+    return this.service.searchOffers(query ?? {}, new Date());
+  }
+}

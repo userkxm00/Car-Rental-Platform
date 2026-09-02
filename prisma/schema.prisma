@@ -229,6 +229,7 @@ model Branch {
   updatedAt  DateTime     @updatedAt
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location     Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  vehicles     Vehicle[]
   quotePickups   QuoteRecord[] @relation("QuotePickupBranch")
   quoteReturns   QuoteRecord[] @relation("QuoteReturnBranch")
   bookingPickups Booking[]     @relation("BookingPickupBranch")
@@ -238,6 +239,7 @@ model Branch {
 
   @@unique([tenantId, code])
   @@index([locationId])
+  @@index([tenantId, status])
   @@map("branches")
 }
 
@@ -359,6 +361,7 @@ model Vehicle {
   updatedAt       DateTime         @updatedAt
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   category        VehicleCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  currentBranch   Branch?          @relation(fields: [currentBranchId], references: [id], onDelete: SetNull)
   odometer        OdometerReading[]
   images          VehicleImage[]
   documents       VehicleDocument[]
@@ -376,6 +379,8 @@ model Vehicle {
   @@index([tenantId])
   @@index([categoryId])
   @@index([currentBranchId])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
   @@map("vehicles")
 }
 

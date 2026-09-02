@@ -14,6 +14,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { PricingModule } from './pricing/pricing.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { CustomersModule } from './customers/customers.module';
+import { SearchModule } from './search/search.module';
 
 /**
  * Root application module.
@@ -38,6 +39,7 @@ import { CustomersModule } from './customers/customers.module';
     BookingsModule,
     PricingModule,
     CustomersModule,
+    SearchModule,
     HealthModule,
   ],
 })
