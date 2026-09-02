@@ -349,7 +349,7 @@ describe('CommercialService promotions (06-C01/09)', () => {
       commercial: { createPromotion: jest.fn(() => Promise.resolve(promotionRow())) },
       availability: {
         findVehicleInTenant: jest.fn(() =>
-          Promise.resolve({ id: 'v-1', status: 'AVAILABLE', currentBranchId: null }),
+          Promise.resolve({ id: 'v-1', categoryId: 'cat-1', status: 'AVAILABLE', currentBranchId: null }),
         ),
         findCategoryInTenant: jest.fn(() =>
           Promise.resolve({ id: 'c-1', active: true }),
@@ -393,7 +393,7 @@ describe('CommercialService promotions (06-C01/09)', () => {
       },
       availability: {
         findVehicleInTenant: jest.fn(() =>
-          Promise.resolve({ id: 'v-1', status: 'AVAILABLE', currentBranchId: null }),
+          Promise.resolve({ id: 'v-1', categoryId: 'cat-1', status: 'AVAILABLE', currentBranchId: null }),
         ),
       },
     });
@@ -721,7 +721,7 @@ describe('CommercialService deposit policies (06-C08)', () => {
       },
       availability: {
         findVehicleInTenant: jest.fn(() =>
-          Promise.resolve({ id: 'v-1', status: 'AVAILABLE', currentBranchId: null }),
+          Promise.resolve({ id: 'v-1', categoryId: 'cat-1', status: 'AVAILABLE', currentBranchId: null }),
         ),
       },
     });

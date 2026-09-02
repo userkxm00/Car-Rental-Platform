@@ -123,7 +123,7 @@ export class QuotesService {
       deliveryZoneId: request.deliveryZoneId ?? undefined,
     });
 
-    const availability = await this.computeAvailability(tenantId, request, context);
+    const { availability, vehicleCategoryId } = await this.computeAvailability(tenantId, request, context);
 
     // 05-A04: the pricing boundary. The pricing engine (PHASE-06 / 06-D)
     // computes the authoritative total through the port; when no rate
@@ -137,7 +137,9 @@ export class QuotesService {
           tenantId,
           mode: request.mode,
           vehicleId: request.vehicleId ?? undefined,
-          categoryId: request.categoryId ?? undefined,
+          // 05-A04: vehicle-mode quotes carry the resolved category so
+          // category-scoped rate plans match (07-E preview finding).
+          categoryId: request.categoryId ?? vehicleCategoryId ?? undefined,
           start: request.start,
           end: request.end,
           pickupBranchId: request.pickupBranchId ?? undefined,
@@ -198,7 +200,7 @@ export class QuotesService {
     tenantId: string,
     request: ValidatedQuoteRequest,
     context: AvailabilityContext,
-  ): Promise<QuoteAvailability> {
+  ): Promise<{ availability: QuoteAvailability; vehicleCategoryId: string | null }> {
     if (request.mode === 'VEHICLE') {
       // 404 VEHICLE_NOT_FOUND for unknown vehicles; archived vehicles are
       // reported unavailable with a structured reason (never an error).
@@ -208,7 +210,10 @@ export class QuotesService {
         { start: request.start, end: request.end },
         context,
       );
-      return { mode: 'VEHICLE', available: result.available, reasons: result.reasons };
+      return {
+        availability: { mode: 'VEHICLE', available: result.available, reasons: result.reasons },
+        vehicleCategoryId: result.categoryId,
+      };
     }
 
     // Category eligibility: the category must belong to the agency and be
@@ -236,10 +241,13 @@ export class QuotesService {
       context,
     );
     return {
-      mode: 'CATEGORY',
-      eligible: capacity.eligible,
-      committed: capacity.committed,
-      availableCount: capacity.available,
+      availability: {
+        mode: 'CATEGORY',
+        eligible: capacity.eligible,
+        committed: capacity.committed,
+        availableCount: capacity.available,
+      },
+      vehicleCategoryId: request.categoryId,
     };
   }
 

@@ -52,6 +52,9 @@ export interface AvailabilityContext {
 
 export interface VehicleAvailabilityResult {
   vehicleId: string;
+  /** 05-A04: lets quote pricing match category-scoped rate plans when the
+   * request names only the vehicle. */
+  categoryId: string;
   start: string;
   end: string;
   available: boolean;

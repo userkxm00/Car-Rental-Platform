@@ -249,15 +249,18 @@ describe('QuotesService.createQuote (05-A03/A04/A05)', () => {
       availabilityRepository: {
         findVehicleInTenant: jest
           .fn()
-          .mockResolvedValue({ id: 'v1', status: 'AVAILABLE', currentBranchId: null }),
+          .mockResolvedValue({ id: 'v1', categoryId: 'cat-1', status: 'AVAILABLE', currentBranchId: null }),
       },
     });
 
     const result = await service.createQuote('ag1', 'u1', vehicleRequest());
 
     expect(result.pricing).toMatchObject({ currency: 'DZD', totalMinor: 120000 });
+    // 05-A04: vehicle-mode quotes carry the resolved category so
+    // category-scoped rate plans match even when the request names only
+    // the vehicle.
     expect(pricing.computeQuotePricing).toHaveBeenCalledWith(
-      expect.objectContaining({ tenantId: 'ag1', mode: 'VEHICLE' }),
+      expect.objectContaining({ tenantId: 'ag1', mode: 'VEHICLE', categoryId: 'cat-1' }),
     );
   });
 

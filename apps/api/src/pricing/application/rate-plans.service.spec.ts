@@ -97,7 +97,7 @@ describe('RatePlansService (06-A01…A07)', () => {
   it('creates a rate plan with validated fields and scopes', async () => {
     const { repository, service } = makeService({
       availabilityRepository: {
-        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v1', status: 'AVAILABLE', currentBranchId: null }))),
+        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v1', categoryId: 'c1', status: 'AVAILABLE', currentBranchId: null }))),
         findCategoryInTenant: jest.fn(() =>  Promise.resolve(({ id: 'c1', active: true }))),
       },
     });
@@ -146,7 +146,7 @@ describe('RatePlansService (06-A01…A07)', () => {
   it('rejects duplicate scope targets (06-A04)', async () => {
     const { service } = makeService({
       availabilityRepository: {
-        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v1', status: 'AVAILABLE', currentBranchId: null }))),
+        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v1', categoryId: 'c1', status: 'AVAILABLE', currentBranchId: null }))),
       },
     });
     await expect(
@@ -230,7 +230,7 @@ describe('RatePlansService (06-A01…A07)', () => {
     const { repository: repo2, service: service2 } = makeService({
       repository: { findInTenant: jest.fn(() =>  Promise.resolve(current)) },
       availabilityRepository: {
-        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v2', status: 'AVAILABLE', currentBranchId: null }))),
+        findVehicleInTenant: jest.fn(() =>  Promise.resolve(({ id: 'v2', categoryId: 'c2', status: 'AVAILABLE', currentBranchId: null }))),
       },
     });
     await service2.updateRatePlan('ag1', 'p1', { scopes: [{ vehicleId: 'v2' }] });

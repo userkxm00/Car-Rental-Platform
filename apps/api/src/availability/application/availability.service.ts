@@ -104,6 +104,7 @@ export class AvailabilityService {
 
     return {
       vehicleId,
+      categoryId: vehicle.categoryId,
       start: interval.start.toISOString(),
       end: interval.end.toISOString(),
       available: reasons.length === 0,

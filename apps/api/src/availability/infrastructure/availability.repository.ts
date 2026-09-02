@@ -30,10 +30,10 @@ export class AvailabilityRepository {
   async findVehicleInTenant(
     tenantId: string,
     vehicleId: string,
-  ): Promise<{ id: string; status: string; currentBranchId: string | null } | null> {
+  ): Promise<{ id: string; categoryId: string; status: string; currentBranchId: string | null } | null> {
     return this.prisma.vehicle.findFirst({
       where: { id: vehicleId, tenantId },
-      select: { id: true, status: true, currentBranchId: true },
+      select: { id: true, categoryId: true, status: true, currentBranchId: true },
     });
   }
 
