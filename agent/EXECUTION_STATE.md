@@ -5,17 +5,17 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-07`
-- Current workstream: `07-E Customer Booking Portal`
-- Current task: `07-E12` (Marketplace E2E gate)
-- Last completed task: `07-E11` (customer support/contact surface) — 07-E01…E11 implemented, committed locally
-- Last completed phase: `PHASE-06 Pricing Engine`
+- Current phase: `PHASE-08` (Contracts & Documents)
+- Current workstream: `08-A Requirements`
+- Current task: `08-A01` (document type catalog)
+- Last completed task: `07-E12` (Marketplace E2E gate) — PHASE-07 complete, gate 07-05 passed, pushed
+- Last completed phase: `PHASE-07 Customer Platform & Marketplace`
 - Current attempt: `1`
 - Last validation: 07-E12 gate sweep after the category-pricing repair (`699d6ec`) — API typecheck 0; lint 0 on all touched src/test files; unit 467/467 (40 suites); e2e 216/216 (27 suites incl. new `me-portal` 8); api-client build 0; ui build 0; customer-web tsc 0, lint 0, tests 41/41, production build OK; live preview smoke of the full portal flow over HTTP (quote priced via category-scoped plan + 20000 deposit, customer ensure, DRAFT booking, confirm, list, CUSTOMER cancel, unauthenticated 401) — 2026-09-02
 - Last known good commit: `699d6ec` (pricing repair; 07-E feat `9ca8cd1` + docs at origin pending push) on `arena/01a05097-car-rental-platform`
 - Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await); not part of 07-C delta, will be cleaned in a dedicated lint sweep
 - Blocker: none
-- Next action: push the 07-E commits; close PHASE-07 at gate 07-05 (07-E12 done — implementation, verification and live smoke all green); start PHASE-08 Contracts & Documents (08-A01)
+- Next action: PHASE-08 / 08-A01 — document type catalog (driving license, national ID, passport…), reusing the existing `CustomerDocumentType` enum and 07-A04 document flow
 - Last updated: 2026-09-02
 
 ## Canonical execution model
@@ -71,7 +71,7 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Phase 07 progress (Customer Platform & Marketplace)
 
-Workstream 07-A Customer Identity/Profile is complete (checkpoint commit `490f522`). Workstream 07-B Marketplace Search is complete (checkpoint commits `57f073c` + `f9d3cce`): `GET /api/v1/search/offers` (public, rate-limited 60/min), pure `search-rules` validation, `SearchService` composition, integration `test/search.e2e-spec.ts`, migrations #18 (marketplace search indexes) and #19 (`vehicles.currentBranchId` FK). Workstream 07-C Maps is complete (checkpoint commit `6ff723e`): proximity queries radius/bbox + nearest-branch pinning with `GET /api/v1/search/locations` (07-C09), `packages/maps` provider abstraction (MapTiler adapters + OSM fallback, 07-C01..C03), and the new `apps/customer-web` marketplace app (MapLibre GL map with clustering 07-C05/C06, map/list synchronized state 07-C07, search-this-area 07-C08, autocomplete 07-C04, pickup/branch map details 07-C10, 2000-offer performance guard 07-C11) with ar/fr/en i18n and RTL. Workstream 07-D Agency Public Profiles is complete (checkpoint commit `baffa79`): public profile API (`GET /api/v1/marketplace/agencies/:slug` + branches/fleet/vehicle detail/signed image URL routes) with verification badge, honest NEW rating summary until PHASE-19 reviews, branches with opening hours and contacts, deposit policies, and the full bookable-fleet pipeline scoped server-side; customer-web profile/fleet/vehicle pages (ar/fr/en) with gallery and pickup map; search gained the `vehicleId` filter (07-D09). Remaining in phase: 07-E Customer Booking Portal; phase gate 07-05.
+Workstream 07-A Customer Identity/Profile is complete (checkpoint commit `490f522`). Workstream 07-B Marketplace Search is complete (checkpoint commits `57f073c` + `f9d3cce`): `GET /api/v1/search/offers` (public, rate-limited 60/min), pure `search-rules` validation, `SearchService` composition, integration `test/search.e2e-spec.ts`, migrations #18 (marketplace search indexes) and #19 (`vehicles.currentBranchId` FK). Workstream 07-C Maps is complete (checkpoint commit `6ff723e`): proximity queries radius/bbox + nearest-branch pinning with `GET /api/v1/search/locations` (07-C09), `packages/maps` provider abstraction (MapTiler adapters + OSM fallback, 07-C01..C03), and the new `apps/customer-web` marketplace app (MapLibre GL map with clustering 07-C05/C06, map/list synchronized state 07-C07, search-this-area 07-C08, autocomplete 07-C04, pickup/branch map details 07-C10, 2000-offer performance guard 07-C11) with ar/fr/en i18n and RTL. Workstream 07-D Agency Public Profiles is complete (checkpoint commit `baffa79`): public profile API (`GET /api/v1/marketplace/agencies/:slug` + branches/fleet/vehicle detail/signed image URL routes) with verification badge, honest NEW rating summary until PHASE-19 reviews, branches with opening hours and contacts, deposit policies, and the full bookable-fleet pipeline scoped server-side; customer-web profile/fleet/vehicle pages (ar/fr/en) with gallery and pickup map; search gained the `vehicleId` filter (07-D09). Workstream 07-E Customer Booking Portal is complete (checkpoint commits `9ca8cd1` feat + `699d6ec` pricing repair + docs): bookings.customerId re-targeted to the tenant customers table (migration #20, 07-E05), the authenticated me-surface portal (me/quotes creator-scoped, me/customers/ensure, me/bookings create/confirm/cancel with CUSTOMER initiator and server-derived tenant scope), and the customer-web booking wizard, reservations list, reservation detail with support surface (ar/fr/en + RTL) with dev token sign-in; live preview smoke of the full flow passed. PHASE-07 closed at gate 07-05; next: PHASE-08.
 
 ## Phase 05 result (Booking Engine)
 
