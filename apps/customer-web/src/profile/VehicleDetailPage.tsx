@@ -252,10 +252,18 @@ export function VehicleDetailPage(): React.JSX.Element {
         ) : (
           <Alert tone="info">{t('vehicle.pricingUnavailable')}</Alert>
         )}
-        <Button variant="primary" disabled title={t('vehicle.bookingSoon')}>
-          {t('vehicle.bookCta')}
-        </Button>
-        <p className="kv-vehicle-offer__soon">{t('vehicle.bookingSoon')}</p>
+        {offer ? (
+          <Link
+            className="kv-button"
+            to={`/book/${encodeURIComponent(slug)}?vehicleId=${encodeURIComponent(vehicleId)}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`}
+          >
+            {t('vehicle.bookCta')}
+          </Link>
+        ) : (
+          <Button variant="primary" disabled title={t('vehicle.pricingUnavailable')}>
+            {t('vehicle.bookCta')}
+          </Button>
+        )}
       </section>
 
       <section className="kv-vehicle-pickup">

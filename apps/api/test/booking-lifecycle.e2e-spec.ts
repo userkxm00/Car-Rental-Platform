@@ -88,6 +88,19 @@ describe('Booking lifecycle operations (integration)', () => {
     return (res.body as { id: string }).id;
   }
 
+  /** 07-E05: bookings reference the tenant's customer records. */
+  async function tenantCustomerId(subject: string): Promise<string> {
+    const userId = await appUserId(subject);
+    const existing = await prisma.customer.findFirst({ where: { tenantId: agencyId, userId } });
+    if (existing) {
+      return existing.id;
+    }
+    const customer = await prisma.customer.create({
+      data: { tenantId: agencyId, userId, firstName: subject, lastName: 'Customer' },
+    });
+    return customer.id;
+  }
+
   async function agencyToken(
     subject: string,
     roles: Array<'AGENCY_OWNER_ADMIN' | 'FINANCE'> = ['AGENCY_OWNER_ADMIN'],
@@ -170,7 +183,7 @@ describe('Booking lifecycle operations (integration)', () => {
       .expect(201);
     const quoteId = (quote.body as { quoteId: string }).quoteId;
 
-    const customerId = await appUserId('bkl-customer');
+    const customerId = await tenantCustomerId('bkl-customer');
 
     await api(app)
       .post(`/api/v1/agencies/${agencyId}/bookings/${bookingId}/request-confirmation`)
@@ -494,7 +507,7 @@ describe('Booking lifecycle operations (integration)', () => {
     expect(await prisma.bookingHold.count({ where: { bookingId, status: 'ACTIVE' } })).toBe(1);
 
     // Confirm replay: one CONFIRMED history entry.
-    const customerId = await appUserId('bkl-customer');
+    const customerId = await tenantCustomerId('bkl-customer');
     await api(app)
       .post(`/api/v1/agencies/${agencyId}/bookings/${bookingId}/request-confirmation`)
       .send({ customerId })

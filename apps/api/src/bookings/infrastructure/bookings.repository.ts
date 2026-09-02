@@ -24,6 +24,7 @@ export interface BookingHistoryEntry {
 export interface BookingWithHistory {
   id: string;
   tenantId: string;
+  agencySlug: string | null;
   bookingNumber: string;
   channel: string;
   inventoryMode: 'VEHICLE' | 'CATEGORY';
@@ -46,6 +47,7 @@ export interface BookingWithHistory {
 
 const HISTORY_INCLUDE = {
   statusHistory: { orderBy: { createdAt: 'desc' as const } },
+  tenant: { select: { slug: true } },
 } satisfies Prisma.BookingInclude;
 
 /**
@@ -108,6 +110,7 @@ export class BookingsRepository {
           startsAt: input.start,
           endsAt: input.end,
         },
+        include: { tenant: { select: { slug: true } } },
       });
       if (idempotency) {
         await tx.bookingIdempotencyRecord.update({
@@ -140,6 +143,32 @@ export class BookingsRepository {
   async findInTenant(tenantId: string, bookingId: string): Promise<BookingWithHistory | null> {
     const booking = await this.prisma.booking.findFirst({
       where: { id: bookingId, tenantId },
+      include: HISTORY_INCLUDE,
+    });
+    if (!booking) {
+      return null;
+    }
+    return this.toDomain(booking, booking.statusHistory);
+  }
+
+  /**
+   * 07-E09: bookings visible to a marketplace customer — created by the
+   * user or attached to one of the user's tenant customer records.
+   */
+  async listForUser(userId: string): Promise<BookingWithHistory[]> {
+    const bookings = await this.prisma.booking.findMany({
+      where: { OR: [{ createdBy: userId }, { customer: { userId } }] },
+      include: HISTORY_INCLUDE,
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return bookings.map((b) => this.toDomain(b, b.statusHistory));
+  }
+
+  /** 07-E09: single own booking — anything else resolves to 404. */
+  async findForUser(userId: string, bookingId: string): Promise<BookingWithHistory | null> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, OR: [{ createdBy: userId }, { customer: { userId } }] },
       include: HISTORY_INCLUDE,
     });
     if (!booking) {
@@ -244,6 +273,15 @@ export class BookingsRepository {
   }
 
   /** Tenant-scoped quote lookup for confirmation linkage (05-C01/C02). */
+  /**
+   * 07-E05: bookings reference the tenant's customer records — a customer
+   * id is only ever accepted when it belongs to this agency (the tenant
+   * scope of the customer master keeps cross-tenant identity out).
+   */
+  async findCustomerInTenant(tenantId: string, customerId: string): Promise<{ id: string } | null> {
+    return this.prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { id: true } });
+  }
+
   async findQuoteInTenant(
     tenantId: string,
     quoteId: string,
@@ -706,6 +744,7 @@ export class BookingsRepository {
     booking: {
       id: string;
       tenantId: string;
+      tenant?: { slug: string } | null;
       bookingNumber: string;
       channel: string;
       inventoryMode: string;
@@ -737,6 +776,7 @@ export class BookingsRepository {
     return {
       id: booking.id,
       tenantId: booking.tenantId,
+      agencySlug: booking.tenant?.slug ?? null,
       bookingNumber: booking.bookingNumber,
       channel: booking.channel,
       inventoryMode: booking.inventoryMode as 'VEHICLE' | 'CATEGORY',

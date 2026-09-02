@@ -48,7 +48,6 @@ model User {
   identities       UserIdentity[]
   memberships      Membership[]
   quoteRecords     QuoteRecord[]
-  bookingsAsCustomer Booking[] @relation("BookingCustomer")
   bookingsCreated    Booking[] @relation("BookingCreator")
   customerProfiles Customer[]
   favorites        CustomerFavorite[]
@@ -541,7 +540,7 @@ model Booking {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customer            User?               @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  customer            Customer?           @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: SetNull)
   creator             User?               @relation("BookingCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   quote               QuoteRecord?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   requestedCategory   VehicleCategory?    @relation("BookingRequestedCategory", fields: [requestedCategoryId], references: [id], onDelete: SetNull)
@@ -1068,8 +1067,10 @@ model OdometerReading {
 // Customer records are tenant-scoped: the same person may exist independently
 // in different agencies (policy-driven uniqueness — no cross-tenant sharing).
 // The marketplace account is the application User; `userId` links the two
-// (07-A02, one link per tenant). Bookings keep their User FK through R1; the
-// customer-record wiring lands with the booking portal (07-E).
+// (07-A02, one link per tenant). Since 07-E05 (booking portal customer
+// information form), bookings reference the tenant's customer record
+// (`bookings.customerId` → `customers.id`) — the tenant scope of the
+// customer master is what keeps cross-tenant leakage out of bookings.
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum CustomerStatus {
@@ -1099,6 +1100,7 @@ model Customer {
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   documents         CustomerDocument[]
+  bookings          Booking[]          @relation("BookingCustomer")
 
   @@unique([tenantId, userId])
   @@index([tenantId])

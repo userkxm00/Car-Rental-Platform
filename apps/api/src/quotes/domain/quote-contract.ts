@@ -33,6 +33,8 @@ export const QuoteErrorCode = {
   DELIVERY_ZONE_NOT_FOUND: 'DELIVERY_ZONE_NOT_FOUND',
   QUOTE_NOT_FOUND: 'QUOTE_NOT_FOUND',
   INVALID_CHANNEL: 'INVALID_CHANNEL',
+  /** 07-E08: an expired quote can never become a booking. */
+  QUOTE_EXPIRED: 'QUOTE_EXPIRED',
 } as const;
 
 export type QuoteErrorCodeValue = (typeof QuoteErrorCode)[keyof typeof QuoteErrorCode];
@@ -102,6 +104,8 @@ export interface QuotePricingPayload {
 /** Quote response contract (05-A06). */
 export interface QuoteResponse {
   quoteId: string;
+  /** 07-E08: agency scope — lets the portal derive the booking tenant. */
+  tenantId: string;
   channel: QuoteChannel;
   createdAt: string;
   expiresAt: string;

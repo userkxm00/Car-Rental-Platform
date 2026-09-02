@@ -43,6 +43,8 @@ function optionalUuid(value: string | undefined, label: string): string | null {
 /** Booking API response: the aggregate plus its append-only history. */
 export interface BookingResponse {
   bookingId: string;
+  tenantId: string;
+  agencySlug: string | null;
   bookingNumber: string;
   channel: BookingChannel;
   inventoryMode: 'VEHICLE' | 'CATEGORY';
@@ -260,6 +262,24 @@ export class BookingsService {
     return rows.map((row) => this.toResponse(row));
   }
 
+  /** 07-E09: the caller's own bookings across agencies. */
+  async listBookingsForUser(userId: string): Promise<BookingResponse[]> {
+    const rows = await this.repository.listForUser(userId);
+    return rows.map((row) => this.toResponse(row));
+  }
+
+  /** 07-E09: own-booking read — cross-tenant reads resolve to 404. */
+  async getBookingForUser(userId: string, bookingId: string): Promise<BookingResponse> {
+    const row = await this.repository.findForUser(userId, bookingId);
+    if (!row) {
+      throw new NotFoundException({
+        code: BookingErrorCode.BOOKING_NOT_FOUND,
+        message: 'Booking not found.',
+      });
+    }
+    return this.toResponse(row);
+  }
+
   /**
    * 05-C01/C02: attach the customer and/or the quote that prices the
    * booking, then move DRAFT|HOLD → PENDING_CONFIRMATION.
@@ -274,6 +294,17 @@ export class BookingsService {
     const { to } = this.resolve(booking, 'requestConfirmation');
 
     const customerId = body.customerId ?? booking.customerId ?? null;
+    // 07-E05: customers are tenant-scoped — a supplied customer id must
+    // exist in this agency (cross-tenant identity never enters a booking).
+    if (body.customerId !== undefined && customerId !== null) {
+      const customer = await this.repository.findCustomerInTenant(tenantId, customerId);
+      if (!customer) {
+        throw new NotFoundException({
+          code: BookingErrorCode.BOOKING_CUSTOMER_NOT_FOUND,
+          message: 'Customer not found in this agency.',
+        });
+      }
+    }
     const quoteId = body.quoteId ?? booking.quoteId ?? null;
     if (quoteId) {
       const quote = await this.repository.findQuoteInTenant(tenantId, quoteId);
@@ -520,6 +551,26 @@ export class BookingsService {
       reason: 'booking.completed',
     });
     return this.toResponse(row);
+  }
+
+  /**
+   * 07-E10: customer-initiated cancellation of an own booking. Ownership
+   * is re-checked here (never trust the route), and the audit history
+   * records the CUSTOMER initiator.
+   */
+  async cancelBookingForUser(
+    userId: string,
+    bookingId: string,
+    reason: string,
+  ): Promise<BookingResponse> {
+    const booking = await this.repository.findForUser(userId, bookingId);
+    if (!booking) {
+      throw new NotFoundException({
+        code: BookingErrorCode.BOOKING_NOT_FOUND,
+        message: 'Booking not found.',
+      });
+    }
+    return this.cancelBooking(booking.tenantId, userId, bookingId, reason, 'CUSTOMER');
   }
 
   /**
@@ -1153,6 +1204,8 @@ export class BookingsService {
   private toResponse(row: BookingWithHistory): BookingResponse {
     return {
       bookingId: row.id,
+      tenantId: row.tenantId,
+      agencySlug: row.agencySlug,
       bookingNumber: row.bookingNumber,
       channel: row.channel as BookingChannel,
       inventoryMode: row.inventoryMode,

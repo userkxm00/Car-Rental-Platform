@@ -13,6 +13,9 @@ function makeRepository(overrides: Partial<FakeSelfRepository> = {}): FakeSelfRe
   return {
     listOwnCustomers: jest.fn(),
     findOwnCustomer: jest.fn(),
+    findUser: jest.fn(),
+    findByUserAndTenant: jest.fn(),
+    createOwnCustomer: jest.fn(),
     updateOwnCustomer: jest.fn(),
     listDocuments: jest.fn(),
     findDocument: jest.fn(),
@@ -321,6 +324,53 @@ describe('CustomerSelfService (07-A self-service)', () => {
       await expect(service.clearSearchHistory('user-1')).resolves.toEqual({ cleared: true });
       expect(repo.clearRecentlyViewed).toHaveBeenCalledWith('user-1');
       expect(repo.clearSearchHistory).toHaveBeenCalledWith('user-1');
+    });
+  });
+
+  describe('ensureCustomerForAgency (07-E05)', () => {
+    it('returns the existing linked record without creating a new one', async () => {
+      const repo = makeRepository({ findByUserAndTenant: jest.fn().mockResolvedValue(customerRow()) });
+      const service = makeService(repo);
+      const response = await service.ensureCustomerForAgency('user-1', 'tenant-1');
+      expect(response.id).toBe('customer-1');
+      expect(repo.createOwnCustomer).not.toHaveBeenCalled();
+    });
+
+    it('404s when the resolved identity has no application user', async () => {
+      const repo = makeRepository({
+        findByUserAndTenant: jest.fn().mockResolvedValue(undefined),
+        findUser: jest.fn().mockResolvedValue(undefined),
+      });
+      const service = makeService(repo);
+      await expect(service.ensureCustomerForAgency('user-1', 'tenant-1')).rejects.toMatchObject({
+        message: 'No application user found for this identity.',
+      });
+      expect(repo.createOwnCustomer).not.toHaveBeenCalled();
+    });
+
+    it('creates the agency link with display-name defaults', async () => {
+      const repo = makeRepository({
+        findByUserAndTenant: jest.fn().mockResolvedValue(undefined),
+        findUser: jest.fn().mockResolvedValue({
+          displayName: 'Karim Haddad',
+          email: 'karim@example.com',
+          phone: '+213555010203',
+          preferredLocale: 'ar',
+        }),
+        createOwnCustomer: jest.fn().mockResolvedValue(customerRow({ firstName: 'Karim Haddad' })),
+      });
+      const service = makeService(repo);
+      const response = await service.ensureCustomerForAgency('user-1', 'tenant-1');
+      expect(response.id).toBe('customer-1');
+      expect(repo.createOwnCustomer).toHaveBeenCalledWith({
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        firstName: 'Karim Haddad',
+        lastName: 'Customer',
+        phone: '+213555010203',
+        email: 'karim@example.com',
+        preferredLocale: 'ar',
+      });
     });
   });
 });

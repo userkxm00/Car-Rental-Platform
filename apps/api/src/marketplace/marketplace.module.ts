@@ -18,5 +18,6 @@ import { AgencyProfilesController } from './presentation/agency-profiles.control
   imports: [SearchModule, MediaModule, SecurityModule],
   controllers: [AgencyProfilesController],
   providers: [AgencyProfilesService, AgencyProfileRepository],
+  exports: [AgencyProfilesService],
 })
 export class MarketplaceModule {}

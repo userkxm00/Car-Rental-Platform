@@ -49,6 +49,7 @@ function bookingRow(overrides: Partial<BookingWithHistory> = {}): BookingWithHis
   return {
     id: 'b1',
     tenantId: 'ag1',
+    agencySlug: 'agency-one',
     bookingNumber: 'BK-2026-000001',
     channel: 'AGENCY_WEB',
     inventoryMode: 'VEHICLE',
@@ -382,7 +383,9 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
 
   it('requestConfirmation links the quote and moves DRAFT|HOLD → PENDING_CONFIRMATION (05-C01/C02)', async () => {
     for (const from of ['DRAFT', 'HOLD'] as const) {
-      const { repo, service } = transitionsRepo(from);
+      const { repo, service } = transitionsRepo(from, {
+        findCustomerInTenant: jest.fn(() => ({ id: 'user-1' })),
+      });
       const result = await service.requestConfirmation('ag1', 'u1', 'b1', {
         customerId: 'user-1',
         quoteId: 'q1',
@@ -393,6 +396,18 @@ describe('BookingsService state machine commands (05-C01…C12)', () => {
         data: { customerId: 'user-1', quoteId: 'q1' },
       });
     }
+  });
+
+  it('rejects a customer id that does not belong to the agency (07-E05)', async () => {
+    const { service } = transitionsRepo('HOLD', {
+      findCustomerInTenant: jest.fn(() => null),
+    });
+    const failure = await service
+      .requestConfirmation('ag1', 'u1', 'b1', { customerId: 'other-agency-customer' })
+      .catch((error: unknown) => error);
+    expect((failure as NotFoundException).getResponse()).toMatchObject({
+      code: 'BOOKING_CUSTOMER_NOT_FOUND',
+    });
   });
 
   it('rejects mismatched or expired quotes at requestConfirmation', async () => {
@@ -777,4 +792,51 @@ describe('BookingsService lifecycle operations (05-D01…D10)', () => {
     );
     expect(result.bookingId).toBe('b1');
   });
+
+  describe('BookingsService marketplace user-scoped access (07-E05/07-E09/07-E10)', () => {
+  it('lists the caller’s bookings across agencies (07-E09)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD', {
+      listForUser: jest.fn(() => [bookingRow({ status: 'HOLD' })]),
+    });
+    const rows = await service.listBookingsForUser('u1');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].bookingId).toBe('b1');
+    expect(rows[0].tenantId).toBe('ag1');
+    expect(rows[0].agencySlug).toBe('agency-one');
+    expect(repo.listForUser).toHaveBeenCalledWith('u1');
+  });
+
+  it('reads an own booking and 404s on any other booking (07-E09)', async () => {
+    const { service } = lifecycleRepo('HOLD', {
+      findForUser: jest.fn((userId: string) =>
+        userId === 'u1' ? bookingRow({ status: 'HOLD' }) : null,
+      ),
+    });
+    await expect(service.getBookingForUser('u1', 'b1')).resolves.toMatchObject({ bookingId: 'b1' });
+    await expect(service.getBookingForUser('u2', 'b1')).rejects.toMatchObject({
+      response: { code: 'BOOKING_NOT_FOUND' },
+    });
+  });
+
+  it('cancels an own booking with the CUSTOMER initiator (07-E10)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD', {
+      findForUser: jest.fn(() => bookingRow({ status: 'HOLD' })),
+    });
+    const result = await service.cancelBookingForUser('u1', 'b1', 'changed my mind');
+    expect(result.status).toBe('CANCELLED');
+    expect(repo.cancelWithRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: 'b1', initiator: 'CUSTOMER', reason: 'changed my mind' }),
+    );
+  });
+
+  it('never cancels a booking the caller cannot see (07-E10)', async () => {
+    const { repo, service } = lifecycleRepo('HOLD', {
+      findForUser: jest.fn(() => null),
+    });
+    await expect(service.cancelBookingForUser('u2', 'b1', 'nope')).rejects.toMatchObject({
+      response: { code: 'BOOKING_NOT_FOUND' },
+    });
+    expect(repo.cancelWithRecord).not.toHaveBeenCalled();
+  });
+});
 });

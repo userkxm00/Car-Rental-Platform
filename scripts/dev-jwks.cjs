@@ -21,6 +21,7 @@ const { exportJWK, generateKeyPair, SignJWT } = require('jose');
 
 const PORT = Number(process.env.DEV_JWKS_PORT ?? 5433);
 const TOKEN_FILE = path.resolve(__dirname, '..', 'apps/agency-web/.dev-token');
+const CUSTOMER_TOKEN_FILE = path.resolve(__dirname, '..', 'apps/customer-web/.dev-token');
 
 async function main() {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -44,18 +45,27 @@ async function main() {
   });
 
   const issuer = `http://127.0.0.1:${PORT}/auth/v1`;
-  const token = await new SignJWT({ sub: `dev-user-${Date.now()}`, role: 'authenticated' })
-    .setProtectedHeader({ alg: 'RS256', kid })
-    .setIssuer(issuer)
-    .setAudience('authenticated')
-    .setIssuedAt()
-    .setExpirationTime('8h')
-    .sign(privateKey);
+  const mint = async (subject) =>
+    new SignJWT({ sub: subject, role: 'authenticated' })
+      .setProtectedHeader({ alg: 'RS256', kid })
+      .setIssuer(issuer)
+      .setAudience('authenticated')
+      .setIssuedAt()
+      .setExpirationTime('8h')
+      .sign(privateKey);
+
+  const token = await mint(`dev-user-${Date.now()}`);
+  // 07-E: the customer booking portal needs a customer identity. Distinct
+  // subject → distinct application user; the portal creates the per-agency
+  // customer record on first booking.
+  const customerToken = await mint(`dev-customer-${Date.now()}`);
 
   fs.writeFileSync(TOKEN_FILE, token, { encoding: 'utf8' });
+  fs.writeFileSync(CUSTOMER_TOKEN_FILE, customerToken, { encoding: 'utf8' });
 
   console.log(`dev-jwks: listening on ${issuer}/.well-known/jwks.json`);
-  console.log(`dev-jwks: access token written to ${TOKEN_FILE}`);
+  console.log(`dev-jwks: agency token written to ${TOKEN_FILE}`);
+  console.log(`dev-jwks: customer token written to ${CUSTOMER_TOKEN_FILE}`);
   console.log('dev-jwks: press Ctrl+C to stop');
 }
 

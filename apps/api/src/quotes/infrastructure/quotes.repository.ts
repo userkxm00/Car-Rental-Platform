@@ -78,14 +78,37 @@ export class QuotesRepository {
     };
   }
 
+  /** 07-E04: the creating user's own quotes (cross-agency listing). */
+  async listByCreator(createdBy: string): Promise<QuoteRecordRow[]> {
+    const rows = await this.prisma.quoteRecord.findMany({
+      where: { createdBy },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((row) => this.toRow(row));
+  }
+
+  /** 07-E04: creator-scoped read — nobody else's quote is ever visible. */
+  async findByCreator(createdBy: string, quoteId: string): Promise<QuoteRecordRow | null> {
+    const row = await this.prisma.quoteRecord.findFirst({ where: { id: quoteId, createdBy } });
+    return row ? this.toRow(row) : null;
+  }
+
   /** Tenant-scoped read — quotes are never visible across agencies. */
   async findInTenant(tenantId: string, quoteId: string): Promise<QuoteRecordRow | null> {
     const row = await this.prisma.quoteRecord.findFirst({
       where: { id: quoteId, tenantId },
     });
-    if (!row) {
-      return null;
-    }
+    return row ? this.toRow(row) : null;
+  }
+
+  private toRow(
+    row: Pick<
+      Prisma.QuoteRecordGetPayload<Record<string, never>>,
+      | 'id' | 'tenantId' | 'channel' | 'inventoryMode' | 'vehicleId' | 'categoryId'
+      | 'pickupBranchId' | 'returnBranchId' | 'deliveryZoneId' | 'startsAt' | 'endsAt'
+      | 'expiresAt' | 'availabilityJson' | 'pricingJson' | 'createdBy' | 'createdAt'
+    >,
+  ): QuoteRecordRow {
     return {
       id: row.id,
       tenantId: row.tenantId,

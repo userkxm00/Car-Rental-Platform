@@ -30,3 +30,11 @@ export {
   SearchOffersResponseDto,
   SearchSortValue,
 } from './endpoints/search';
+
+export {
+  createMePortalApi,
+  MePortalApi,
+  PortalBookingDto,
+  PortalCustomerDto,
+  PortalQuoteDto,
+} from './endpoints/me-portal';

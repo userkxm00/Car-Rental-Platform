@@ -565,3 +565,136 @@
   color: var(--kv-color-primary, #0f6b4f);
   text-decoration: none;
 }
+
+/* --- Customer booking portal (07-E) ---------------------------------------- */
+
+.kv-portal-session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-block-end: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--kv-text-muted, #5b6b63);
+}
+
+.kv-portal-token-form {
+  max-width: 480px;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.kv-portal-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.kv-portal-quote {
+  margin-block-end: 0.75rem;
+}
+
+.kv-portal-hint {
+  font-size: 0.85rem;
+  color: var(--kv-text-muted, #5b6b63);
+}
+
+.kv-portal-policies,
+.kv-portal-support {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.kv-portal-booking-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.kv-portal-booking-link {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.kv-portal-booking-number {
+  font-weight: 700;
+}
+
+.kv-portal-booking-dates {
+  font-size: 0.85rem;
+  color: var(--kv-text-muted, #5b6b63);
+}
+
+.kv-portal-booking-agency {
+  font-size: 0.8rem;
+  color: var(--kv-color-primary, #0f6b4f);
+}
+
+.kv-status {
+  display: inline-block;
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--kv-info-bg, #e8f0fb);
+  color: var(--kv-info, #1c5da8);
+}
+
+.kv-status--cancelled,
+.kv-status--rejected,
+.kv-status--expired,
+.kv-status--no_show {
+  background: var(--kv-danger-bg, #fbe9e9);
+  color: var(--kv-danger, #b23b3b);
+}
+
+.kv-status--confirmed,
+.kv-status--active,
+.kv-status--completed {
+  background: #e6f4ea;
+  color: #1e7a3c;
+}
+
+.kv-portal-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-block-end: 0.75rem;
+}
+
+.kv-portal-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.kv-portal-history li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.kv-portal-history__reason {
+  color: var(--kv-text-muted, #5b6b63);
+}
+
+.kv-topbar__bookings {
+  color: inherit;
+  font-size: 0.9rem;
+  margin-inline-end: 0.5rem;
+}

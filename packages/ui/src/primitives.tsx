@@ -94,7 +94,7 @@ export function Alert({
   tone,
   children,
 }: {
-  tone: 'error' | 'info';
+  tone: 'error' | 'info' | 'success';
   children: ReactNode;
 }): ReactNode {
   return (

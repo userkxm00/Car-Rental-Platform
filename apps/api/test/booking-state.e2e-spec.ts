@@ -86,6 +86,19 @@ describe('Booking state machine (integration)', () => {
     return (res.body as { id: string }).id;
   }
 
+  /** 07-E05: bookings reference the tenant's customer records. */
+  async function tenantCustomerId(subject: string): Promise<string> {
+    const userId = await appUserId(subject);
+    const existing = await prisma.customer.findFirst({ where: { tenantId: agencyId, userId } });
+    if (existing) {
+      return existing.id;
+    }
+    const customer = await prisma.customer.create({
+      data: { tenantId: agencyId, userId, firstName: subject, lastName: 'Customer' },
+    });
+    return customer.id;
+  }
+
   async function agencyToken(
     subject: string,
     roles: Array<'AGENCY_OWNER_ADMIN' | 'FINANCE'> = ['AGENCY_OWNER_ADMIN'],
@@ -168,7 +181,7 @@ describe('Booking state machine (integration)', () => {
       .expect(201);
     const quoteId = (quote.body as { quoteId: string }).quoteId;
 
-    const customerId = await appUserId('bks-customer');
+    const customerId = await tenantCustomerId('bks-customer');
 
     const pending = await api(app)
       .post(`/api/v1/agencies/${agencyId}/bookings/${bookingId}/request-confirmation`)
@@ -317,7 +330,7 @@ describe('Booking state machine (integration)', () => {
       .set('Authorization', `Bearer ${auth}`)
       .expect(201);
     const secondId = (second.body as BookingBody).bookingId as string;
-    const customerId = await appUserId('bks-customer-2');
+    const customerId = await tenantCustomerId('bks-customer-2');
     await api(app)
       .post(`/api/v1/agencies/${agencyId}/bookings/${secondId}/request-confirmation`)
       .send({ customerId })

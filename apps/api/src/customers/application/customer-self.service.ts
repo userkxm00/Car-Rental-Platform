@@ -44,6 +44,38 @@ export class CustomerSelfService {
 
   // ── Own profiles (07-A02/07-A03) ─────────────────────────────────────────
 
+  /**
+   * 07-E05: resolve-or-create the caller's customer record for one agency.
+   *
+   * The link is unique per (tenant, user); a second call for the same
+   * agency returns the same record. Fresh records carry the user's
+   * display name as a starting point — the customer edits details later
+   * through the existing /me/customers profile surface (07-A03).
+   */
+  async ensureCustomerForAgency(userId: string, tenantId: string): Promise<CustomerResponse> {
+    const existing = await this.repository.findByUserAndTenant(userId, tenantId);
+    if (existing) {
+      return toCustomerResponse(existing);
+    }
+    const user = await this.repository.findUser(userId);
+    if (!user) {
+      throw new NotFoundException({
+        code: CustomerErrorCode.CUSTOMER_NOT_FOUND,
+        message: 'No application user found for this identity.',
+      });
+    }
+    const created = await this.repository.createOwnCustomer({
+      tenantId,
+      userId,
+      firstName: user.displayName?.trim() || 'Customer',
+      lastName: 'Customer',
+      phone: user.phone ?? null,
+      email: user.email ?? null,
+      preferredLocale: user.preferredLocale || 'en',
+    });
+    return toCustomerResponse(created);
+  }
+
   async listMyProfiles(userId: string): Promise<CustomerProfileListItem[]> {
     const rows = await this.repository.listOwnCustomers(userId);
     return rows.map((row) => ({

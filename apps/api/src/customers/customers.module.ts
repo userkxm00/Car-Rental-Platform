@@ -22,6 +22,6 @@ import { CustomersController } from './presentation/customers.controller';
   imports: [IdentityModule, FleetModule, AuthorizationModule, SecurityModule],
   controllers: [CustomersController, CustomerMeController],
   providers: [CustomersService, CustomerSelfService, CustomersRepository, CustomerSelfRepository],
-  exports: [CustomersService],
+  exports: [CustomersService, CustomerSelfService],
 })
 export class CustomersModule {}

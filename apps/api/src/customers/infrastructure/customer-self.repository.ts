@@ -60,6 +60,34 @@ export class CustomerSelfRepository {
     return customer ?? undefined;
   }
 
+  async findUser(userId: string): Promise<{ displayName: string; email: string | null; phone: string | null; preferredLocale: string } | undefined> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true, email: true, phone: true, preferredLocale: true },
+    });
+    return user ?? undefined;
+  }
+
+  async findByUserAndTenant(userId: string, tenantId: string): Promise<Customer | undefined> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+    return customer ?? undefined;
+  }
+
+  /** 07-E05: first link of a portal user to an agency's customer list. */
+  async createOwnCustomer(data: {
+    tenantId: string;
+    userId: string;
+    firstName: string;
+    lastName: string;
+    phone: string | null;
+    email: string | null;
+    preferredLocale: string;
+  }): Promise<Customer> {
+    return this.prisma.customer.create({ data });
+  }
+
   async updateOwnCustomer(
     userId: string,
     customerId: string,

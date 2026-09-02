@@ -243,6 +243,10 @@
   background: var(--kv-info-bg);
   color: var(--kv-info);
 }
+.kv-alert--success {
+  background: var(--kv-success-bg, #e6f4ea);
+  color: var(--kv-success, #1e7a3c);
+}
 
 @media (max-width: 640px) {
   .kv-page-header {

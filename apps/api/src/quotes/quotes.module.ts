@@ -19,5 +19,6 @@ import { QuotesController } from './presentation/quotes.controller';
   imports: [IdentityModule, AuthorizationModule, AvailabilityModule, PricingModule],
   controllers: [QuotesController],
   providers: [QuotesService, QuotesRepository],
+  exports: [QuotesService],
 })
 export class QuotesModule {}

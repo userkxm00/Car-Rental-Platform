@@ -12,7 +12,7 @@ Phase 07 workstream 07-A implementation record. Authority: `architecture/databas
 ## Identity model decisions
 
 1. **The marketplace customer account is the application `User`** (authentication-authorization.md: one user may be a customer and hold agency memberships; no duplicate users per surface). `customers.userId` links a platform account to an agency's business record (07-A02) — staff link by verified email; the booking flow will auto-create/link records with the 07-E portal.
-2. **Bookings keep their `User` FK through R1.** The current booking engine (05-B/05-C) attaches the platform user directly; re-targeting `bookings.customerId` to the tenant `customers` table lands with 07-E05 (customer information form) so the walk-in/import flows get the same treatment. Until then the two models coexist: the user link on `customers` is the bridge.
+2. **Since 07-E05, bookings reference the tenant's customer record.** `bookings.customerId` is a FK to `customers` (migration `20260902010000_booking_customer_retarget`, #20) with `ON DELETE SET NULL`; the `User.bookingsAsCustomer` back-relation is gone and `Customer.bookings` is the owner side. Confirmation requests validate a supplied `customerId` against the booking's own tenant (`BOOKING_CUSTOMER_NOT_FOUND` otherwise); omitted/null customer ids still flow for walk-in/import attach. `bookings.createdBy` keeps the audit link to the platform user, and `customers.userId` is the bridge between the two identities.
 3. **Documents verification is staff-manual and staff-immutable once VERIFIED.** Customers submit (PENDING), correct data while not verified, and resubmit after rejection (REJECTED → PENDING). Metadata edits by either side reset verification to PENDING — changed evidence is unverified evidence.
 4. **R1 document requirements baseline** (07-A04): a driving rental requires a VERIFIED, unexpired `DRIVER_LICENSE`; other types (NATIONAL_ID, PASSPORT, RESIDENCE_PERMIT, OTHER) are collected on agency policy without blocking. The computation is a pure function (`computeDocumentRequirements`) exposed on the customer detail response; per-agency requirement configuration can replace the baseline later without changing the state model.
 
@@ -41,6 +41,20 @@ Self-service (`me/…`, authenticated own-only; the caller identity comes from t
 | GET/PUT/DELETE `me/favorites[/:vehicleId]` | favorites (07-A05, cross-agency) |
 | POST/GET/DELETE `me/recently-viewed` | recently viewed (07-A06, upsert + cap 20) |
 | POST/GET/DELETE `me/search-history` | search history (07-A07, snapshot + cap 50) |
+
+Customer booking portal (07-E, authenticated non-member surface — same own-only
+identity rules; agency references are public slugs resolved through the
+marketplace participating-agency rules):
+
+| Route | Purpose |
+|---|---|
+| POST `me/quotes` | quote for a public agency (`agencySlug`), channel forced to `MARKETPLACE` (07-E04) |
+| GET `me/quotes[/:quoteId]` | own quotes only, creator-scoped reads (07-E04) |
+| POST `me/customers/ensure` | resolve-or-create own customer record per agency — idempotent, unique per (tenant, user) (07-E05) |
+| POST `me/bookings` | DRAFT booking from an own unexpired quote (`QUOTE_EXPIRED` otherwise); tenant derived server-side; idempotency-key replay (07-E08) |
+| GET `me/bookings[/:bookingId]` | own reservations with agency slug (07-E09) |
+| POST `me/bookings/:bookingId/confirm` | confirmation request; supplied `customerId` must belong to the booking's tenant (07-E05/E08) |
+| POST `me/bookings/:bookingId/cancel` | customer cancellation, `CUSTOMER` initiator audited (07-E10) |
 
 Authorization additions (permissions.ts/roles.ts): `customer.read` (FINANCE included), `customer.manage` (owner/branch-manager/staff), `customer.link` (owner/branch-manager only — least privilege on account linkage), `customer.document.verify` (owner/branch-manager/staff). The CUSTOMER role bundle is unchanged: self-service endpoints are own-only by identity, not by permission.
 

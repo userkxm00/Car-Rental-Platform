@@ -34,6 +34,8 @@ export const BookingErrorCode = {
   BOOKING_UNAVAILABLE: 'BOOKING_UNAVAILABLE',
   /** The requested transition is not allowed from the current state. */
   BOOKING_INVALID_TRANSITION: 'BOOKING_INVALID_TRANSITION',
+  /** 07-E05: the attached customer id is not a customer of this agency. */
+  BOOKING_CUSTOMER_NOT_FOUND: 'BOOKING_CUSTOMER_NOT_FOUND',
   /** The commitment guard rejected the interval (04-B write path). */
   INTERVAL_CONFLICT: 'INTERVAL_CONFLICT',
   /** Category bookings hold capacity, not a vehicle interval. */

@@ -88,6 +88,19 @@ describe('Pricing financial truth (integration, 06-D)', () => {
     return (res.body as { id: string }).id;
   }
 
+  /** 07-E05: bookings reference the tenant's customer records. */
+  async function tenantCustomerId(subject: string): Promise<string> {
+    const userId = await appUserId(subject);
+    const existing = await prisma.customer.findFirst({ where: { tenantId: agencyId, userId } });
+    if (existing) {
+      return existing.id;
+    }
+    const customer = await prisma.customer.create({
+      data: { tenantId: agencyId, userId, firstName: subject, lastName: 'Customer' },
+    });
+    return customer.id;
+  }
+
   async function agencyToken(subject: string): Promise<string> {
     const userId = await appUserId(subject);
     const existing = (await memberships.listForTenant(agencyId)).find((m) => m.userId === userId);
@@ -320,7 +333,7 @@ describe('Pricing financial truth (integration, 06-D)', () => {
     const pricing = (quote.body as { pricing: QuotePricingBody }).pricing;
     expect(pricing?.totalMinor).toBe(5000);
 
-    const customerId = await appUserId('bkp-customer');
+    const customerId = await tenantCustomerId('bkp-customer');
     await api(app)
       .post(`/api/v1/agencies/${agencyId}/bookings/${bookingId}/request-confirmation`)
       .send({ customerId, quoteId })

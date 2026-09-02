@@ -163,6 +163,24 @@ export class QuotesService {
     return this.toResponse(row);
   }
 
+  /** 07-E04: the caller's own quotes across agencies (most recent first). */
+  async listQuotesByCreator(createdBy: string): Promise<QuoteResponse[]> {
+    const rows = await this.repository.listByCreator(createdBy);
+    return rows.map((row) => this.toResponse(row));
+  }
+
+  /** 07-E04: creator-scoped quote read — nobody else's quote is visible. */
+  async getQuoteByCreator(createdBy: string, quoteId: string): Promise<QuoteResponse> {
+    const row = await this.repository.findByCreator(createdBy, quoteId);
+    if (!row) {
+      throw new NotFoundException({
+        code: QuoteErrorCode.QUOTE_NOT_FOUND,
+        message: 'Quote not found.',
+      });
+    }
+    return this.toResponse(row);
+  }
+
   /** 05-A05: tenant-scoped read with an explicit expiry flag. */
   async getQuote(tenantId: string, quoteId: string): Promise<QuoteResponse> {
     const row = await this.repository.findInTenant(tenantId, quoteId);
@@ -228,6 +246,7 @@ export class QuotesService {
   private toResponse(row: QuoteRecordRow): QuoteResponse {
     return {
       quoteId: row.id,
+      tenantId: row.tenantId,
       channel: row.channel as QuoteChannel,
       createdAt: row.createdAt.toISOString(),
       expiresAt: row.expiresAt.toISOString(),

@@ -24,6 +24,7 @@ postgres-data/
 redis-data/
 apps/api/.pgdata/
 apps/agency-web/.dev-token
+apps/customer-web/.dev-token
 
 # Logs
 *.log

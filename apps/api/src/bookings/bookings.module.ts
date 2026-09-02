@@ -16,5 +16,6 @@ import { BookingsController } from './presentation/bookings.controller';
   imports: [IdentityModule, AuthorizationModule, AvailabilityModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository],
+  exports: [BookingsService],
 })
 export class BookingsModule {}

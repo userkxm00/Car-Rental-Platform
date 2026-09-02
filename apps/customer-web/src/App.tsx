@@ -9,6 +9,10 @@ import { SearchPage } from './search/SearchPage';
 import { AgencyFleetPage } from './profile/AgencyFleetPage';
 import { AgencyProfilePage } from './profile/AgencyProfilePage';
 import { VehicleDetailPage } from './profile/VehicleDetailPage';
+import { BookingWizardPage } from './portal/BookingWizardPage';
+import { MyBookingsPage } from './portal/MyBookingsPage';
+import { BookingDetailPage } from './portal/BookingDetailPage';
+import { PORTAL_TOKEN_STORAGE_KEY } from './api';
 
 function Topbar(): ReactNode {
   const { t, i18n } = useTranslation();
@@ -23,6 +27,11 @@ function Topbar(): ReactNode {
         {t('app.name')} <span style={{ fontWeight: 500 }}>{t('app.descriptor')}</span>
       </Link>
       <div className="kv-topbar__actions">
+        {typeof localStorage !== 'undefined' && localStorage.getItem(PORTAL_TOKEN_STORAGE_KEY) ? (
+          <Link className="kv-topbar__bookings" to="/bookings">
+            {t('nav.myBookings')}
+          </Link>
+        ) : null}
         <Select
           aria-label={t('nav.language')}
           value={i18n.resolvedLanguage ?? 'en'}
@@ -48,6 +57,9 @@ function AppRoutes(): ReactNode {
       <Route path="/:slug" element={<AgencyProfilePage />} />
       <Route path="/:slug/vehicles" element={<AgencyFleetPage />} />
       <Route path="/:slug/vehicles/:vehicleId" element={<VehicleDetailPage />} />
+      <Route path="/book/:slug" element={<BookingWizardPage />} />
+      <Route path="/bookings" element={<MyBookingsPage />} />
+      <Route path="/bookings/:bookingId" element={<BookingDetailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
