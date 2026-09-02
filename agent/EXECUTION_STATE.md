@@ -6,16 +6,16 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-07`
-- Current workstream: `07-C Maps` (next)
-- Current task: `07-C01`
-- Last completed task: `07-B11` (marketplace search — empty result contract) — 07-B complete, committed + pushed
+- Current workstream: `07-D Agency Public Profiles`
+- Current task: `07-D01`
+- Last completed task: `07-C11` (map performance validation) — 07-C complete, committed + pushed
 - Last completed phase: `PHASE-06 Pricing Engine`
 - Current attempt: `1`
-- Last validation: 07-B sweep — typecheck 0 → lint 0 (all new `src/search/**` + `test/search.e2e-spec.ts`) → unit 427 (38 suites) → e2e 199 (25 suites incl. new `search` 7) — 2026-09-02
-- Last known good commit: `57f073c` on `arena/01a05097-car-rental-platform` (pushed; 07-B feat on origin)
-- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await); not part of 07-B delta, will be cleaned in a dedicated lint sweep
+- Last validation: 07-C sweep — API typecheck 0 / search lint 0, unit 439 (40 suites incl. search 32), e2e 201 (25 suites incl. search 9); packages/maps tsc+lint 0, tests 10/10; api-client build 0; customer-web tsc 0, lint 0, tests 22/22, production build OK; live preview smoke (API 4000 + customer-web 3002, seeded demo data on `car_rental_preview`) — radius/bbox/nearest-branch/distance-sort verified over HTTP — 2026-09-02
+- Last known good commit: `6ff723e` on `arena/01a05097-car-rental-platform` (pushed; 07-C feat on origin)
+- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await); not part of 07-C delta, will be cleaned in a dedicated lint sweep
 - Blocker: none
-- Next action: PHASE-07 / 07-C — maps & location surfaces (07-C01), then 07-D Agency Public Profiles, 07-E Customer Booking Portal, close at gate 07-05
+- Next action: PHASE-07 / 07-D — Agency Public Profiles (07-D01), then 07-E Customer Booking Portal, close at gate 07-05
 - Last updated: 2026-09-02
 
 ## Canonical execution model
@@ -67,11 +67,11 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-07 / 07-C / 07-C01`
+`PHASE-07 / 07-D / 07-D01`
 
 ## Phase 07 progress (Customer Platform & Marketplace)
 
-Workstream 07-A Customer Identity/Profile is complete (checkpoint commit `490f522`). Workstream 07-B Marketplace Search is complete: `GET /api/v1/search/offers` (public, rate-limited 60/min), pure `search-rules` validation (12 unit tests), `SearchService` composition (7 unit tests), integration `test/search.e2e-spec.ts` (7 tests), migrations #18 (marketplace search indexes) and #19 (`vehicles.currentBranchId` FK) applied via the direct-pg recipe. Remaining in phase: 07-C Maps, 07-D Agency Public Profiles, 07-E Customer Booking Portal; phase gate 07-05.
+Workstream 07-A Customer Identity/Profile is complete (checkpoint commit `490f522`). Workstream 07-B Marketplace Search is complete (checkpoint commits `57f073c` + `f9d3cce`): `GET /api/v1/search/offers` (public, rate-limited 60/min), pure `search-rules` validation, `SearchService` composition, integration `test/search.e2e-spec.ts`, migrations #18 (marketplace search indexes) and #19 (`vehicles.currentBranchId` FK). Workstream 07-C Maps is complete (checkpoint commit `6ff723e`): proximity queries radius/bbox + nearest-branch pinning with `GET /api/v1/search/locations` (07-C09), `packages/maps` provider abstraction (MapTiler adapters + OSM fallback, 07-C01..C03), and the new `apps/customer-web` marketplace app (MapLibre GL map with clustering 07-C05/C06, map/list synchronized state 07-C07, search-this-area 07-C08, autocomplete 07-C04, pickup/branch map details 07-C10, 2000-offer performance guard 07-C11) with ar/fr/en i18n and RTL. Remaining in phase: 07-D Agency Public Profiles, 07-E Customer Booking Portal; phase gate 07-05.
 
 ## Phase 05 result (Booking Engine)
 
