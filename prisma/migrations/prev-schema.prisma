@@ -120,6 +120,8 @@ model Tenant {
   feeRules          FeeRule[]
   depositPolicies   DepositPolicy[]
   customers         Customer[]
+  documentPolicies  AgencyDocumentPolicy[]
+  documentTemplates DocumentTemplate[]
 
   @@map("tenants")
 }
@@ -1142,6 +1144,46 @@ model AgencyDocumentPolicy {
 
   @@unique([tenantId])
   @@map("agency_document_policies")
+}
+
+/// PHASE-08 / 08-B01: logical contract template identity (tenant-scoped,
+/// one per code). Versions are append-only releases (08-B02) so historical
+/// signed contracts stay reproducible (docs/06 documents).
+model DocumentTemplate {
+  id        String                  @id @default(uuid()) @db.Uuid
+  tenantId  String                  @db.Uuid
+  code      String
+  kind      DocumentTemplateKind    @default(RENTAL_CONTRACT)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  tenant    Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  versions  DocumentTemplateVersion[]
+
+  @@unique([tenantId, code])
+  @@map("document_templates")
+}
+
+/// 08-B02: immutable versioned template content per locale (ar/fr/en).
+/// A release may add rows for one or more locales at the same version
+/// number; existing versions are never updated or deleted.
+model DocumentTemplateVersion {
+  id            String           @id @default(uuid()) @db.Uuid
+  templateId    String           @db.Uuid
+  version       Int
+  locale        String
+  title         String
+  body          String
+  effectiveFrom DateTime
+  createdAt     DateTime         @default(now())
+  template      DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, locale, version])
+  @@index([templateId])
+  @@map("document_template_versions")
+}
+
+enum DocumentTemplateKind {
+  RENTAL_CONTRACT
 }
 
 model CustomerDocument {
