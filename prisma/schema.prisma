@@ -53,6 +53,8 @@ model User {
   favorites        CustomerFavorite[]
   recentlyViewed   RecentlyViewedVehicle[]
   searchHistory    SearchHistoryEntry[]
+  issuedContracts  RentalContract[]    @relation("ContractIssuer")
+  signedContracts  ContractSignature[] @relation("ContractSigner")
 
   @@map("users")
 }
@@ -122,6 +124,9 @@ model Tenant {
   customers         Customer[]
   documentPolicies  AgencyDocumentPolicy[]
   documentTemplates DocumentTemplate[]
+  rentalContracts   RentalContract[]
+  receipts          Receipt[]
+  generatedDocuments GeneratedDocument[]
 
   @@map("tenants")
 }
@@ -557,6 +562,9 @@ model Booking {
   cancellations       BookingCancellation[]
   assignments         BookingAssignment[]
   idempotencyRecords  BookingIdempotencyRecord[]
+  contract            RentalContract?
+  receipt             Receipt?
+  generatedDocuments  GeneratedDocument[]            @relation("BookingGeneratedDocument")
 
   @@unique([tenantId, bookingNumber])
   @@index([tenantId, createdAt])
@@ -1158,6 +1166,7 @@ model DocumentTemplate {
   updatedAt DateTime                @updatedAt
   tenant    Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   versions  DocumentTemplateVersion[]
+  snapshots ContractSnapshot[]
 
   @@unique([tenantId, code])
   @@map("document_templates")
@@ -1184,6 +1193,150 @@ model DocumentTemplateVersion {
 
 enum DocumentTemplateKind {
   RENTAL_CONTRACT
+}
+
+enum RentalContractStatus {
+  ISSUED
+  SIGNED
+  CANCELLED
+}
+
+/// 08-C01: the rental contract aggregate — one contract per booking,
+/// tenant-unique human-readable number, signed/issued audit fields.
+model RentalContract {
+  id             String               @id @default(uuid()) @db.Uuid
+  tenantId       String               @db.Uuid
+  bookingId      String               @unique @db.Uuid
+  contractNumber String
+  status         RentalContractStatus @default(ISSUED)
+  locale         String
+  issuedById     String?              @db.Uuid
+  issuedAt       DateTime             @default(now())
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking        Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  issuedBy       User?                @relation("ContractIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  snapshot       ContractSnapshot?
+  signature      ContractSignature?
+  documents      GeneratedDocument[]
+  receipt        Receipt?
+
+  @@unique([tenantId, contractNumber])
+  @@map("rental_contracts")
+}
+
+/// 08-C02: the authoritative rendered content captured at issuance — the
+/// template code/version, locale, substituted values and the exact text
+/// (contentHash = sha256 of contentText). Immutable: the snapshot is never
+/// rewritten so historical contracts stay reproducible (08-C07).
+model ContractSnapshot {
+  id              String            @id @default(uuid()) @db.Uuid
+  contractId      String            @unique @db.Uuid
+  templateId      String?           @db.Uuid
+  templateCode    String
+  templateVersion Int?
+  locale          String
+  variablesJson   Json
+  contentText     String
+  contentHash     String
+  createdAt       DateTime          @default(now())
+  contract        RentalContract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  template        DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@map("contract_snapshots")
+}
+
+enum ContractSignatureMethod {
+  CUSTOMER_DIGITAL
+  ON_SITE
+}
+
+enum ContractSignerRole {
+  CUSTOMER
+  AGENCY_REPRESENTATIVE
+}
+
+/// 08-C03: the signature boundary — one signature per contract with the
+/// actor/time evidence and the exact template version + content hash the
+/// signature attests to (08-05 gate: signed records reproduce correctly).
+model ContractSignature {
+  id                String                  @id @default(uuid()) @db.Uuid
+  contractId        String                  @unique @db.Uuid
+  method            ContractSignatureMethod
+  signerRole        ContractSignerRole
+  signerName        String
+  note              String?
+  signedByUserId    String?                 @db.Uuid
+  signedAt          DateTime                @default(now())
+  templateVersionId String?                 @db.Uuid
+  templateVersion   Int?
+  contentHash       String
+  contract          RentalContract          @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  signedBy          User?                   @relation("ContractSigner", fields: [signedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("contract_signatures")
+}
+
+enum ReceiptKind {
+  RENTAL_CONTRACT
+}
+
+/// 08-C05: receipt records trace to the authoritative booking, its price
+/// snapshot (totalsJson captured at generation) and the rental contract.
+model Receipt {
+  id            String             @id @default(uuid()) @db.Uuid
+  tenantId      String             @db.Uuid
+  bookingId     String             @unique @db.Uuid
+  contractId    String             @unique @db.Uuid
+  receiptNumber String
+  kind          ReceiptKind        @default(RENTAL_CONTRACT)
+  locale        String
+  totalsJson    Json
+  contentText   String
+  contentHash   String
+  createdById   String?            @db.Uuid
+  createdAt     DateTime           @default(now())
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking       Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  contract      RentalContract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  documents     GeneratedDocument[]
+
+  @@unique([tenantId, receiptNumber])
+  @@map("receipts")
+}
+
+enum GeneratedDocumentKind {
+  RENTAL_CONTRACT
+  RENTAL_RECEIPT
+}
+
+/// 08-C04/08-C06: generated PDF artifacts (contracts and receipts). Bytes
+/// live in object storage behind the media ObjectStorage port; this row
+/// holds the metadata and the integrity hash of the rendered text.
+model GeneratedDocument {
+  id          String                @id @default(uuid()) @db.Uuid
+  tenantId    String                @db.Uuid
+  kind        GeneratedDocumentKind
+  bookingId   String?               @db.Uuid
+  contractId  String?               @db.Uuid
+  receiptId   String?               @db.Uuid
+  locale      String
+  title       String
+  contentHash String
+  objectKey   String
+  contentType String                @default("application/pdf")
+  sizeBytes   Int
+  createdAt   DateTime              @default(now())
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking     Booking?              @relation("BookingGeneratedDocument", fields: [bookingId], references: [id], onDelete: Cascade)
+  contract    RentalContract?       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  receipt     Receipt?              @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([receiptId])
+  @@index([tenantId, createdAt])
+  @@map("generated_documents")
 }
 
 model CustomerDocument {
