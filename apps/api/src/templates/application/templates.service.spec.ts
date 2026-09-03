@@ -11,17 +11,16 @@ const versionRow = (
   locale: 'ar' | 'fr' | 'en',
   effectiveFrom: Date,
   body = '{{AGENCY_NAME}}',
-): DocumentTemplateVersion =>
-  ({
-    id: `${TEMPLATE}-${version}-${locale}`,
-    templateId: TEMPLATE,
-    version,
-    locale,
-    title: `v${version}`,
-    body,
-    effectiveFrom,
-    createdAt: new Date('2026-09-01T00:00:00Z'),
-  }) as DocumentTemplateVersion;
+): DocumentTemplateVersion => ({
+  id: `${TEMPLATE}-${version}-${locale}`,
+  templateId: TEMPLATE,
+  version,
+  locale,
+  title: `v${version}`,
+  body,
+  effectiveFrom,
+  createdAt: new Date('2026-09-01T00:00:00Z'),
+});
 
 function makeRepository(overrides: Partial<TemplatesRepository> = {}) {
   return {

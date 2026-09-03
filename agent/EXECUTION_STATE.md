@@ -6,17 +6,17 @@ This file is the persistent checkpoint for autonomous implementation.
 
 - Overall: `IN_PROGRESS`
 - Current phase: `PHASE-08` (Contracts & Documents)
-- Current workstream: `08-B Templates` (next)
-- Current task: `08-A` complete (08-A01…08-A05) — verified, live-smoked, pushed
+- Current workstream: `08-B Templates` — implemented, in final verification
+- Current task: `08-B07` (version selection) — complete as code; full-sweep verification running
 - Last completed task: `08-A Requirements` (document catalog, agency policy, required-document rules, booking checklist, expiry-aware READY_FOR_PICKUP gate)
 - Last completed phase: `PHASE-07 Customer Platform & Marketplace`
 - Current attempt: `1`
-- Last validation: 08-A sweep — API typecheck 0; eslint 0 on all touched files; unit 497/497 (42 suites incl. documents rules 12 + service 17 and portal checklist delegation); e2e 226/226 (28 suites incl. new `documents` 9 and `me-portal` +1); live HTTP smoke `scripts/qa-08a-documents-smoke.cjs` 20/20 (policy default/upsert/validation, walk-in exemption, foreign-license passport rule, gate 409 BOOKING_DOCUMENTS_INCOMPLETE → 201 after verification, 401 unauth, 403 cross-tenant); both `car_rental` + `car_rental_preview` at migration 21 — 2026-09-03
-- Last known good commit: 08-A checkpoint commit on `arena/01a05097-car-rental-platform` (pushed to origin)
+- Last validation: 08-B in verification — repo typecheck 0; eslint 0 on touched files; unit 526/526 (44 suites incl. template-rules 12 + templates.service 17); templates e2e 8/8 (JWKS 4171); api-client build 0; customer-web vitest 41/41; live HTTP smoke `scripts/qa-08b-templates-smoke.cjs` 21/21 (built-in defaults, code normalization, TEMPLATE_CODE_EXISTS/INVALID_TEMPLATE_VARIABLES, append-only v2, 08-B07 selection + ar→fr fallback, 401/403/404 isolation); full e2e sweep across all 29 suites running — 2026-09-03
+- Last known good commit: `f95dec7` (feat 08-B) on `arena/01a05097-car-rental-platform` (pushed to origin)
 - Environment note: the sandbox reset (2026-09-03) wiped node_modules + PostgreSQL data and reverted the branch to `e534d20`; recovered via `git fetch origin arena/01a05097-car-rental-platform` + `git reset --mixed FETCH_HEAD`, `npm install`, `scripts/local-pg.cjs start`, re-created both DBs and `migrate deploy` — the fresh deploy exposed and repaired comment-semicolon defects in 5 older migration files (see EVIDENCE_LOG 08-A)
 - Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await/unbound-method; 22 of them in `bookings.service.spec.ts`); not part of this delta, will be cleaned in a dedicated lint sweep
 - Blocker: none
-- Next action: PHASE-08 / 08-B01 — contract template model (versioned, tenant-scoped, ar/fr/en per 08-B03…B05), then substitution (08-B06) and version selection (08-B07)
+- Next action: finish the 08-B full-sweep verification, record evidence, then PHASE-08 / 08-C Contract/Receipt (rental contract aggregate + snapshot 08-C01/08-C02 via `TemplatesService.renderForTenant`, signature boundary 08-C03, PDF rendering 08-C04, receipts 08-C05)
 - Last updated: 2026-09-03
 
 ## Canonical execution model
@@ -68,11 +68,13 @@ A new agent/session must read this file first, then the WBS and active task spec
 
 ## Current execution pointer
 
-`PHASE-08 / 08-B / 08-B01`
+`PHASE-08 / 08-B / verification → 08-C`
 
 ## Phase 08 progress (Contracts & Documents)
 
-Workstream 08-A Requirements is complete: the document type catalog (08-A01 — five persisted `CustomerDocumentType` values with per-type field requirements, expiry behavior and ar/fr/en labels), the agency document policy (08-A02 — `AgencyDocumentPolicy` row, migration #21, `GET/PUT /api/v1/agencies/:agencyId/document-policy` with `configured` flag and `INVALID_DOCUMENT_TYPES` validation), the customer required-document rules (08-A03 — driving license always required, policy extras, foreign-license passport rule), the booking document checklist (08-A04 — `GET /api/v1/agencies/:agencyId/bookings/:bookingId/documents` and `GET /api/v1/me/bookings/:bookingId/documents` with NOT_SUBMITTED/PENDING/REJECTED/EXPIRED/VERIFIED statuses), and expiry handling (08-A05 — EXPIRED when the document lapses before the rental ENDS) enforced as a READY_FOR_PICKUP gate inside `BookingsService.markReady` (`BOOKING_DOCUMENTS_INCOMPLETE` with the missing types; walk-in bookings without a linked customer stay exempt until the contract workflow 08-C). The booking/portal suites were updated with verified-license fixtures and the conflict-protection suite's date-rotted fixtures were converted to `Date.now()`-relative. Next: 08-B Templates.
+Workstream 08-A Requirements is complete.
+Workstream 08-B Templates is implemented (schema `8f21180`, feature `f95dec7`): versioned `document_templates`/`document_template_versions` (migration #22, append-only releases), built-in ar/fr/en contract content, whitelisted variable substitution with locale-aware formatting, effective-date version selection with the ar→fr→en fallback chain, `contract.read`/`contract.manage` permissions in the agency role bundles and docs/37, and the typed api-client surface. Verification: templates e2e 8/8 + live smoke 21/21; full regression sweep in progress.
+08-A detail: the document type catalog (08-A01 — five persisted `CustomerDocumentType` values with per-type field requirements, expiry behavior and ar/fr/en labels), the agency document policy (08-A02 — `AgencyDocumentPolicy` row, migration #21, `GET/PUT /api/v1/agencies/:agencyId/document-policy` with `configured` flag and `INVALID_DOCUMENT_TYPES` validation), the customer required-document rules (08-A03 — driving license always required, policy extras, foreign-license passport rule), the booking document checklist (08-A04 — `GET /api/v1/agencies/:agencyId/bookings/:bookingId/documents` and `GET /api/v1/me/bookings/:bookingId/documents` with NOT_SUBMITTED/PENDING/REJECTED/EXPIRED/VERIFIED statuses), and expiry handling (08-A05 — EXPIRED when the document lapses before the rental ENDS) enforced as a READY_FOR_PICKUP gate inside `BookingsService.markReady` (`BOOKING_DOCUMENTS_INCOMPLETE` with the missing types; walk-in bookings without a linked customer stay exempt until the contract workflow 08-C). The booking/portal suites were updated with verified-license fixtures and the conflict-protection suite's date-rotted fixtures were converted to `Date.now()`-relative. Next: 08-B Templates.
 
 ## Phase 07 progress (Customer Platform & Marketplace)
 

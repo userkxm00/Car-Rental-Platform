@@ -10,6 +10,7 @@ import {
   TEMPLATE_CODE_PATTERN,
   TEMPLATE_KIND,
   TEMPLATE_TITLE_MAX_LENGTH,
+  TEMPLATE_VARIABLES,
   unknownTemplateVariables,
   type TemplateLocale,
   type TemplateValues,
@@ -262,7 +263,17 @@ export class TemplatesService {
     if (typeof value !== 'object' || Array.isArray(value)) {
       throw this.invalidInput('variables must be an object.');
     }
-    return value as TemplateValues;
+    // Only whitelisted keys travel into the substitution engine; every
+    // other key is ignored (closed whitelist, 08-B06).
+    const record = value as Record<string, unknown>;
+    const values: TemplateValues = {};
+    for (const key of TEMPLATE_VARIABLES) {
+      const raw = record[key];
+      if (raw !== undefined) {
+        values[key] = raw as string | number | Date | null;
+      }
+    }
+    return values;
   }
 
   private parseOptionalUuid(value: unknown): string | null {
