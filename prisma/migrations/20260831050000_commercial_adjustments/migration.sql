@@ -1,7 +1,7 @@
 -- PHASE-06 / 06-C: commercial adjustments — promotions (06-C01) with
 -- eligibility scopes (06-C09), coupons (06-C02), typed extras (06-C03),
 -- context fee rules (06-C04..C07) and deposit pricing (06-C08). Money is
--- integer minor units; PERCENT values are basis points. Selection
+-- integer minor units and PERCENT values are basis points. Selection
 -- semantics live in apps/api/src/pricing/domain/commercial-rules.ts.
 
 CREATE TYPE "CommercialDiscountType" AS ENUM ('PERCENT', 'FIXED_MINOR');

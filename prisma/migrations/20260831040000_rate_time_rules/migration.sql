@@ -1,6 +1,6 @@
 -- PHASE-06 / 06-B: time rules — duration tiers (06-B05) and date/season
 -- adjustments (06-B06..B08) on top of the 06-A rate model. Percent values
--- are basis points; money stays integer minor units. Calculation semantics
+-- are basis points and money stays integer minor units. Calculation semantics
 -- live in the pricing domain (apps/api/src/pricing/domain/time-rules.ts).
 
 CREATE TYPE "RateAdjustmentKind" AS ENUM ('SEASONAL', 'SPECIAL_DATE', 'WEEKEND', 'HOLIDAY');
@@ -39,7 +39,7 @@ CREATE UNIQUE INDEX "rate_plan_adjustments_ratePlanId_kind_precedence_key"
     ON "rate_plan_adjustments"("ratePlanId", "kind", "precedence");
 
 -- At most one open tier per plan (enforced again at the application
--- boundary; this is the database backstop).
+-- boundary - this is the database backstop).
 CREATE UNIQUE INDEX "rate_plan_tiers_open_unique"
     ON "rate_plan_tiers"("ratePlanId")
     WHERE "upToUnits" IS NULL;

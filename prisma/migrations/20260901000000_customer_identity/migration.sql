@@ -14,7 +14,7 @@ CREATE TYPE "CustomerDocumentType" AS ENUM ('DRIVER_LICENSE', 'NATIONAL_ID', 'PA
 CREATE TYPE "CustomerDocumentStatus" AS ENUM ('PENDING', 'VERIFIED', 'REJECTED');
 
 -- Tenant-scoped customer record. `userId` is the marketplace-account link
--- (07-A02); NULL keeps the row unlinked (walk-in/agency-created records).
+-- (07-A02) - NULL keeps the row unlinked (walk-in/agency-created records).
 CREATE TABLE "customers" (
     "id" UUID NOT NULL,
     "tenantId" UUID NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE "search_history" (
     CONSTRAINT "search_history_pkey" PRIMARY KEY ("id")
 );
 
--- One marketplace-account link per tenant; multiple NULL rows are allowed
+-- One marketplace-account link per tenant, multiple NULL rows are allowed
 -- (PostgreSQL treats NULLs as distinct in unique indexes).
 CREATE UNIQUE INDEX "customers_tenantId_userId_key" ON "customers"("tenantId", "userId");
 CREATE INDEX "customers_tenantId_idx" ON "customers"("tenantId");
