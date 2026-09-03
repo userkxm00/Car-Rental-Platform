@@ -24,6 +24,9 @@ const LOCAL_TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgresql://postgres:postgres@127.0.0.1:5432/car_rental';
 
 describe('Conflict protection (integration)', () => {
+  /** Future instants relative to now (date-rot-proof, 04-B semantics kept). */
+  const at = (hours: number): Date => new Date(Date.now() + hours * 3600_000);
+
   let app: INestApplication;
   let prisma: PrismaClient;
   const slugNamespace = 'conf-';
@@ -54,8 +57,8 @@ describe('Conflict protection (integration)', () => {
 
   it('allows back-to-back commitment intervals (half-open boundary)', async () => {
     const { vehicleId } = await createTenantAndVehicle();
-    const first = { start: new Date('2026-09-01T08:00:00Z'), end: new Date('2026-09-01T10:00:00Z') };
-    const second = { start: first.end, end: new Date('2026-09-01T12:00:00Z') };
+    const first = { start: at(24), end: at(26) };
+    const second = { start: first.end, end: at(28) };
 
     await withVehicleCommitmentLock(prisma, vehicleId, async (tx) =>
       tx.bookingHold.create({
@@ -88,8 +91,8 @@ describe('Conflict protection (integration)', () => {
 
   it('never persists two overlapping commitments under concurrency', async () => {
     const { tenantId, vehicleId } = await createTenantAndVehicle();
-    const interval = { start: new Date('2026-09-02T08:00:00Z'), end: new Date('2026-09-02T18:00:00Z') };
-    const overlapping = { start: new Date('2026-09-02T09:00:00Z'), end: new Date('2026-09-02T19:00:00Z') };
+    const interval = { start: at(48), end: at(58) };
+    const overlapping = { start: at(49), end: at(59) };
 
     const createHold = (candidate: typeof interval) =>
       withVehicleCommitmentLock(prisma, vehicleId, async (tx) => {
@@ -124,7 +127,7 @@ describe('Conflict protection (integration)', () => {
 
   it('lets a block exclusion free the interval once it becomes inert', async () => {
     const { tenantId, vehicleId } = await createTenantAndVehicle();
-    const interval = { start: new Date('2026-09-03T08:00:00Z'), end: new Date('2026-09-03T18:00:00Z') };
+    const interval = { start: at(48), end: at(58) };
 
     const block = await prisma.vehicleBlock.create({
       data: { tenantId, vehicleId, blockType: 'MAINTENANCE', startsAt: interval.start, endsAt: interval.end },
@@ -155,7 +158,7 @@ describe('Conflict protection (integration)', () => {
 
   it('expires stale ACTIVE holds so they cannot block new commitments (04-B05)', async () => {
     const { tenantId, vehicleId } = await createTenantAndVehicle();
-    const past = { start: new Date('2026-08-01T08:00:00Z'), end: new Date('2026-08-01T18:00:00Z') };
+    const past = { start: at(-24 * 20), end: at(-24 * 20 + 10) };
 
     await prisma.bookingHold.create({
       data: {
@@ -163,12 +166,12 @@ describe('Conflict protection (integration)', () => {
         vehicleId,
         startsAt: past.start,
         endsAt: past.end,
-        expiresAt: new Date('2026-08-01T07:00:00Z'),
+        expiresAt: at(-24 * 20 + 9),
         channel: 'STAFF',
       },
     });
 
-    const fresh = { start: new Date('2026-09-04T08:00:00Z'), end: new Date('2026-09-04T18:00:00Z') };
+    const fresh = { start: at(48), end: at(58) };
     await withVehicleCommitmentLock(prisma, vehicleId, async (tx) => {
       await assertIntervalFree(tx, vehicleId, fresh);
       await tx.bookingHold.create({
@@ -191,7 +194,7 @@ describe('Conflict protection (integration)', () => {
 
   it('rejects overlapping vehicle blocks at the database constraint level', async () => {
     const { tenantId, vehicleId } = await createTenantAndVehicle();
-    const interval = { start: new Date('2026-09-05T08:00:00Z'), end: new Date('2026-09-05T18:00:00Z') };
+    const interval = { start: at(48), end: at(58) };
 
     await prisma.vehicleBlock.create({
       data: { tenantId, vehicleId, blockType: 'INSPECTION', startsAt: interval.start, endsAt: interval.end },
@@ -203,8 +206,8 @@ describe('Conflict protection (integration)', () => {
           tenantId,
           vehicleId,
           blockType: 'DAMAGE',
-          startsAt: new Date('2026-09-05T09:00:00Z'),
-          endsAt: new Date('2026-09-05T19:00:00Z'),
+          startsAt: at(49),
+          endsAt: at(59),
         },
       }),
     ).rejects.toThrow(/vehicle_blocks_no_overlap/);

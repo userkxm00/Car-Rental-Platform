@@ -118,6 +118,15 @@ export class MePortalController {
     return this.service.confirmBooking(userId, bookingId, body ?? {});
   }
 
+  @Get('bookings/:bookingId/documents')
+  async bookingChecklist(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingChecklist']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingChecklist(userId, bookingId);
+  }
+
   @Post('bookings/:bookingId/cancel')
   @HttpCode(200)
   async cancelBooking(

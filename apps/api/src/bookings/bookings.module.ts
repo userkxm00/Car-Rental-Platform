@@ -5,6 +5,7 @@ import { AvailabilityModule } from '../availability/availability.module';
 import { BookingsService } from './application/bookings.service';
 import { BookingsRepository } from './infrastructure/bookings.repository';
 import { BookingsController } from './presentation/bookings.controller';
+import { DocumentsModule } from '../documents/documents.module';
 
 /**
  * Booking engine module (PHASE-05 / 05-B): the booking aggregate with
@@ -13,7 +14,7 @@ import { BookingsController } from './presentation/bookings.controller';
  * (05-B05). State-machine transition commands land in 05-C.
  */
 @Module({
-  imports: [IdentityModule, AuthorizationModule, AvailabilityModule],
+  imports: [IdentityModule, AuthorizationModule, AvailabilityModule, DocumentsModule],
   controllers: [BookingsController],
   providers: [BookingsService, BookingsRepository],
   exports: [BookingsService],

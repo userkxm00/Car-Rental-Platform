@@ -24,6 +24,7 @@ import {
   type BookingWithHistory,
   type IdempotencyScope,
 } from '../infrastructure/bookings.repository';
+import { DocumentsService } from '../../documents/application/documents.service';
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -91,6 +92,7 @@ export class BookingsService {
     private readonly locationContext: LocationContextService,
     private readonly repository: BookingsRepository,
     @Inject(APP_ENV) private readonly env: AppEnv,
+    private readonly documents: DocumentsService,
   ) {}
 
   /** 05-B03/04 boundary validation — mirrors the quote boundary (05-A). */
@@ -455,6 +457,14 @@ export class BookingsService {
         message: 'A physical vehicle must be assigned before pickup (05-D07).',
       });
     }
+    // 08-A04: READY_FOR_PICKUP requires the customer's required documents
+    // to be VERIFIED and valid through the return (08-A05). Walk-in
+    // bookings without a linked customer are exempt until the contract
+    // workflow (08-C) attaches one.
+    await this.documents.assertReadyForPickup(tenantId, booking.customerId, {
+      start: booking.startsAt,
+      end: booking.endsAt,
+    });
     const row = await this.repository.applyTransition({
       bookingId,
       from: booking.status,

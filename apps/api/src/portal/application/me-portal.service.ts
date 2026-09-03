@@ -8,6 +8,8 @@ import { QuoteErrorCode } from '../../quotes/domain/quote-contract';
 import type { QuoteRequestInput } from '../../quotes/domain/quote-contract';
 import { CustomerSelfService } from '../../customers/application/customer-self.service';
 import type { CustomerResponse } from '../../customers/domain/customer-contract';
+import { DocumentsService } from '../../documents/application/documents.service';
+import type { DocumentChecklistResponse } from '../../documents/domain/documents.contract';
 
 /**
  * PHASE-07 / 07-E customer booking portal (me-surface use-cases).
@@ -30,6 +32,7 @@ export class MePortalService {
     private readonly quotes: QuotesService,
     private readonly bookings: BookingsService,
     private readonly customers: CustomerSelfService,
+    private readonly documents: DocumentsService,
   ) {}
 
   /** 07-E04: request a quote against a public agency slug (MARKETPLACE channel). */
@@ -112,5 +115,11 @@ export class MePortalService {
   /** 07-E10: customer-initiated cancellation (CUSTOMER initiator audited). */
   async cancelBooking(userId: string, bookingId: string, reason: string): Promise<BookingResponse> {
     return this.bookings.cancelBookingForUser(userId, bookingId, reason);
+  }
+
+  /** 08-A04: the required-document checklist for an own reservation. */
+  async bookingChecklist(userId: string, bookingId: string): Promise<DocumentChecklistResponse> {
+    const booking = await this.bookings.getBookingForUser(userId, bookingId);
+    return this.documents.checklistForBooking(booking.tenantId, bookingId);
   }
 }

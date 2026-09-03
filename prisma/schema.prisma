@@ -120,6 +120,7 @@ model Tenant {
   feeRules          FeeRule[]
   depositPolicies   DepositPolicy[]
   customers         Customer[]
+  documentPolicies  AgencyDocumentPolicy[]
 
   @@map("tenants")
 }
@@ -1126,6 +1127,24 @@ enum CustomerDocumentStatus {
 /// (database-schema-v1 §5.2). Verification is manual (agency staff); the
 /// media object reference is a plain UUID until the media_objects storage
 /// table lands (03-C follow-up).
+/// PHASE-08 / 08-A02: the agency's document policy — which customer
+/// document types the agency requires for its bookings, and whether a
+/// passport is additionally required for customers whose driving license
+/// was issued outside Algeria. One active policy per agency; an agency
+/// without a row runs the default policy (driving license only).
+model AgencyDocumentPolicy {
+  id                              String               @id @default(uuid()) @db.Uuid
+  tenantId                        String               @db.Uuid
+  requiredTypes                   CustomerDocumentType[]
+  requirePassportForForeignLicense Boolean              @default(false)
+  createdAt                       DateTime             @default(now())
+  updatedAt                       DateTime             @updatedAt
+  tenant                          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
+  @@map("agency_document_policies")
+}
+
 model CustomerDocument {
   id              String                 @id @default(uuid()) @db.Uuid
   customerId      String                 @db.Uuid

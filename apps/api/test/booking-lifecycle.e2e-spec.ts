@@ -88,6 +88,23 @@ describe('Booking lifecycle operations (integration)', () => {
     return (res.body as { id: string }).id;
   }
 
+  /** PHASE-08 / 08-A04: the state machine's READY_FOR_PICKUP gate needs a
+   * VERIFIED driving license that stays valid through the rental. */
+  async function ensureVerifiedLicense(customerId: string): Promise<void> {
+    await prisma.customerDocument.upsert({
+      where: { customerId_type: { customerId, type: 'DRIVER_LICENSE' } },
+      create: {
+        customerId,
+        type: 'DRIVER_LICENSE',
+        number: `LIC-${Date.now()}`,
+        issueDate: new Date('2024-01-01T00:00:00Z'),
+        expiryDate: new Date(Date.now() + 2 * 365 * 24 * 3600_000),
+        status: 'VERIFIED',
+      },
+      update: { status: 'VERIFIED' },
+    });
+  }
+
   /** 07-E05: bookings reference the tenant's customer records. */
   async function tenantCustomerId(subject: string): Promise<string> {
     const userId = await appUserId(subject);
@@ -190,6 +207,10 @@ describe('Booking lifecycle operations (integration)', () => {
       .send({ customerId, quoteId })
       .set('Authorization', `Bearer ${auth}`)
       .expect(201);
+
+    // PHASE-08 / 08-A04: READY_FOR_PICKUP requires a VERIFIED driving
+    // license valid through the return, so the lifecycle walks seed one.
+    await ensureVerifiedLicense(customerId);
 
     return { bookingId, quoteId, customerId, end };
   }

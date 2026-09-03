@@ -6,6 +6,7 @@ import type { LocationContextService } from '../../availability/application/loca
 import { IntervalConflictError } from '../../availability/infrastructure/commitment-guard';
 import { BookingsService } from './bookings.service';
 import type { BookingsRepository, BookingWithHistory } from '../infrastructure/bookings.repository';
+import type { DocumentsService } from '../../documents/application/documents.service';
 import { ReplayedCommandError } from '../infrastructure/bookings.repository';
 import { BookingErrorCode, formatBookingNumber } from '../domain/booking-rules';
 
@@ -87,8 +88,11 @@ function makeService(options: {
     SUPABASE_JWKS_URL: 'http://127.0.0.1:5433/auth/v1/.well-known/jwks.json',
   });
   const repository = (options.repository ?? {}) as BookingsRepository;
-  const service = new BookingsService(availability, locationContext, repository, env);
-  return { service, repository };
+  const documents = {
+    assertReadyForPickup: jest.fn().mockResolvedValue(undefined),
+  } as unknown as DocumentsService;
+  const service = new BookingsService(availability, locationContext, repository, env, documents);
+  return { service, repository, documents };
 }
 
 const FUTURE = {

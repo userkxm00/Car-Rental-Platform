@@ -43,6 +43,14 @@ interface PortalBookingBody {
   statusHistory: Array<{ toStatus: string; reason: string | null }>;
 }
 
+interface PortalChecklistBody {
+  bookingId: string;
+  customerLinked: boolean;
+  required: string[];
+  items: Array<{ type: string; status: string }>;
+  complete: boolean;
+}
+
 interface PortalQuoteBody {
   quoteId: string;
   tenantId: string;
@@ -321,6 +329,50 @@ describe('Customer booking portal (me-surface, integration)', () => {
     );
     expect(failure.status).toBe(404);
     expect(failure.code).toBe('BOOKING_CUSTOMER_NOT_FOUND');
+  });
+
+  it('reports the own booking document checklist with the server-derived tenant (08-A04)', async () => {
+    const interval = futureInterval();
+    const quoteRes = await postAs(await token('ptl-cust-1'), '/api/v1/me/quotes')
+      .send({ agencySlug, vehicleId, ...interval })
+      .expect(201);
+    const bookingRes = await postAs(await token('ptl-cust-1'), '/api/v1/me/bookings')
+      .send({ quoteId: (quoteRes.body as PortalQuoteBody).quoteId })
+      .expect(201);
+    const bookingId = (bookingRes.body as PortalBookingBody).bookingId;
+
+    // DRAFT without a linked customer: unlinked checklist, license required.
+    const unlinked = await getAs(await token('ptl-cust-1'), `/api/v1/me/bookings/${bookingId}/documents`).expect(200);
+    expect(unlinked.body as PortalChecklistBody).toMatchObject({
+      bookingId,
+      customerLinked: false,
+      complete: false,
+    });
+    expect((unlinked.body as PortalChecklistBody).required).toEqual(['DRIVER_LICENSE']);
+
+    // Another caller can never read this booking's checklist.
+    await getAs(await token('ptl-cust-2'), `/api/v1/me/bookings/${bookingId}/documents`).expect(404);
+
+    // Link the customer record and confirm: the checklist becomes linked.
+    const ensureRes = await postAs(await token('ptl-cust-1'), '/api/v1/me/customers/ensure')
+      .send({ agencySlug })
+      .expect(200);
+    const customerId = (ensureRes.body as { id: string }).id;
+    await postAs(await token('ptl-cust-1'), `/api/v1/me/bookings/${bookingId}/confirm`)
+      .send({ customerId })
+      .expect(200);
+
+    const linked = await getAs(await token('ptl-cust-1'), `/api/v1/me/bookings/${bookingId}/documents`).expect(200);
+    expect(linked.body as PortalChecklistBody).toMatchObject({
+      bookingId,
+      customerLinked: true,
+      complete: false,
+    });
+    expect((linked.body as PortalChecklistBody).items[0]).toEqual({
+      type: 'DRIVER_LICENSE',
+      status: 'NOT_SUBMITTED',
+      expiresAt: null,
+    });
   });
 
   it('lets a customer cancel an own booking with the CUSTOMER initiator (07-E10)', async () => {

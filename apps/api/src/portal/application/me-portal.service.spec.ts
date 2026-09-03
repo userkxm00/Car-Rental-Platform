@@ -6,6 +6,7 @@ import type { QuoteResponse } from '../../quotes/domain/quote-contract';
 import type { BookingsService } from '../../bookings/application/bookings.service';
 import type { BookingResponse } from '../../bookings/application/bookings.service';
 import type { CustomerSelfService } from '../../customers/application/customer-self.service';
+import type { DocumentsService } from '../../documents/application/documents.service';
 
 const profileResponse = () => ({
   agency: {
@@ -116,11 +117,23 @@ function makeService(options: {
   } as unknown as BookingsService;
   const customers = { ensureCustomerForAgency: customersEnsure } as unknown as CustomerSelfService;
 
-  const service = new MePortalService(profiles, quotes, bookings, customers);
+  const documentsChecklist = jest.fn().mockResolvedValue({
+    bookingId: 'b1',
+    customerLinked: true,
+    required: [],
+    items: [],
+    complete: true,
+  });
+  const documents = {
+    checklistForBooking: documentsChecklist,
+  } as unknown as DocumentsService;
+  const service = new MePortalService(profiles, quotes, bookings, customers, documents);
   return {
     service,
+    documents,
     mocks: {
       profileGet,
+      checklistForBooking: documentsChecklist,
       quotesCreate,
       quotesList,
       quoteGet,
@@ -223,5 +236,17 @@ describe('MePortalService (07-E customer booking portal)', () => {
       status: 'CANCELLED',
     });
     expect(mocks.bookingsCancel).toHaveBeenCalledWith('u1', 'b1', 'changed my mind');
+  });
+
+  it('returns the document checklist for an own booking with the server-derived tenant (08-A04)', async () => {
+    const { service, mocks } = makeService({
+      bookingGet: jest.fn().mockResolvedValue(bookingResponse()),
+    });
+    await expect(service.bookingChecklist('u1', 'b1')).resolves.toMatchObject({
+      bookingId: 'b1',
+      complete: true,
+    });
+    expect(mocks.bookingGet).toHaveBeenCalledWith('u1', 'b1');
+    expect(mocks.checklistForBooking).toHaveBeenCalledWith('agency-1', 'b1');
   });
 });
