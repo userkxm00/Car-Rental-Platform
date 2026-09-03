@@ -1,5 +1,17 @@
 export { ApiClient, ApiError, ApiErrorEnvelope, ApiClientOptions, TokenProvider } from './client';
 export {
+  createTemplatesApi,
+  TemplateCurrentLocaleDto,
+  TemplateListResponseDto,
+  TemplateLocale,
+  TemplatePreviewResponseDto,
+  TemplateResponseDto,
+  TemplatesApi,
+  TemplateSummaryDto,
+  TemplateVersionDto,
+  TemplateVersionInput,
+} from './endpoints/templates';
+export {
   createFleetApi,
   VehicleCategoryDto,
   VehicleDto,

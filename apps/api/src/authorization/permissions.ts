@@ -44,6 +44,10 @@ export const Permission = {
   PRICING_MANAGE: 'pricing.manage',
   BILLING_MANAGE: 'billing.manage',
 
+  // Contracts & documents (PHASE-08)
+  CONTRACT_READ: 'contract.read',
+  CONTRACT_MANAGE: 'contract.manage',
+
   // Agency administration
   STAFF_MANAGE: 'staff.manage',
   REPORTS_READ: 'reports.read',
@@ -81,6 +85,8 @@ export const PERMISSION_DOC: Record<PermissionValue, string> = {
   [Permission.PRICING_READ]: 'Read pricing.',
   [Permission.PRICING_MANAGE]: 'Manage pricing.',
   [Permission.BILLING_MANAGE]: 'Manage billing.',
+  [Permission.CONTRACT_READ]: 'Read contract templates, contracts and receipts.',
+  [Permission.CONTRACT_MANAGE]: 'Manage contract templates and generate contracts.',
   [Permission.STAFF_MANAGE]: 'Manage agency staff.',
   [Permission.REPORTS_READ]: 'Read reports.',
   [Permission.PLATFORM_ADMIN]: 'Platform-boundary administration (audited).',

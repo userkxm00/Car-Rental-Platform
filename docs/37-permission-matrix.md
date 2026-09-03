@@ -33,6 +33,8 @@ Legend:
 | Payments | A* | A | R/policy-scoped | limited recording | A | own payments/status |
 | Refunds/financial adjustments | A* | A | —/policy | — | A | request/support |
 | Invoices/receipts | A* | A | R | R | A | own |
+| Contract templates | A* | A | W scoped | R | R | — |
+| Rental contracts/signatures | A* | A | W scoped | R | R | own contracts |
 | Staff management | A* | A | W scoped | — | — | — |
 | Reports | A* | A | R scoped | limited operational | A | own history |
 | Support tickets | A* | A | W scoped | W | W billing-related | own |

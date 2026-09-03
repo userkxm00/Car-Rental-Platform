@@ -18,6 +18,7 @@ import { SearchModule } from './search/search.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { MePortalModule } from './portal/me-portal.module';
 import { DocumentsModule } from './documents/documents.module';
+import { TemplatesModule } from './templates/templates.module';
 
 /**
  * Root application module.
@@ -46,6 +47,7 @@ import { DocumentsModule } from './documents/documents.module';
     MarketplaceModule,
     MePortalModule,
     DocumentsModule,
+    TemplatesModule,
     HealthModule,
   ],
 })
