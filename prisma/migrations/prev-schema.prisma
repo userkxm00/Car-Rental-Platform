@@ -55,6 +55,8 @@ model User {
   searchHistory    SearchHistoryEntry[]
   issuedContracts  RentalContract[]    @relation("ContractIssuer")
   signedContracts  ContractSignature[] @relation("ContractSigner")
+  documentAccesses DocumentAccessEvent[] @relation("DocumentAccessActor")
+  revokedDocuments GeneratedDocument[]  @relation("DocumentRevoker")
 
   @@map("users")
 }
@@ -1240,6 +1242,7 @@ model ContractSnapshot {
   variablesJson   Json
   contentText     String
   contentHash     String
+  title           String            @default("")
   createdAt       DateTime          @default(now())
   contract        RentalContract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
   template        DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
@@ -1311,9 +1314,44 @@ enum GeneratedDocumentKind {
   RENTAL_RECEIPT
 }
 
+/// Append-only access events for generated contract/receipt documents
+/// (08-D03): every signed-URL issuance and every revocation/restore is
+/// recorded with the acting user and the access channel, so document
+/// disclosure remains auditable per docs/06.
+enum DocumentAccessAction {
+  URL_ISSUED
+  ACCESS_REVOKED
+  ACCESS_RESTORED
+}
+
+enum DocumentAccessChannel {
+  STAFF
+  CUSTOMER
+}
+
+model DocumentAccessEvent {
+  id          String                @id @default(uuid()) @db.Uuid
+  tenantId    String                @db.Uuid
+  documentId  String                @db.Uuid
+  action      DocumentAccessAction
+  channel     DocumentAccessChannel
+  actorUserId String?               @db.Uuid
+  createdAt   DateTime              @default(now())
+  document    GeneratedDocument     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actor       User?                 @relation("DocumentAccessActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("document_access_events")
+}
+
 /// 08-C04/08-C06: generated PDF artifacts (contracts and receipts). Bytes
 /// live in object storage behind the media ObjectStorage port; this row
 /// holds the metadata and the integrity hash of the rendered text.
+///
+/// 08-D04/08-D05: `retainUntil` records the retention horizon at creation
+/// and `revokedAt`/`revokedById` stop further signed-URL issuance after an
+/// explicit staff revocation — both preserve the historical document row.
 model GeneratedDocument {
   id          String                @id @default(uuid()) @db.Uuid
   tenantId    String                @db.Uuid
@@ -1327,11 +1365,16 @@ model GeneratedDocument {
   objectKey   String
   contentType String                @default("application/pdf")
   sizeBytes   Int
+  retainUntil DateTime?
+  revokedAt   DateTime?
+  revokedById String?               @db.Uuid
   createdAt   DateTime              @default(now())
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   booking     Booking?              @relation("BookingGeneratedDocument", fields: [bookingId], references: [id], onDelete: Cascade)
   contract    RentalContract?       @relation(fields: [contractId], references: [id], onDelete: Cascade)
   receipt     Receipt?              @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  revokedBy   User?                 @relation("DocumentRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  accessEvents DocumentAccessEvent[]
 
   @@index([contractId])
   @@index([receiptId])
