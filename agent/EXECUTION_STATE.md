@@ -5,19 +5,19 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-08` (Contracts & Documents)
-- Current workstream: `08-B Templates` — implemented, in final verification
-- Current task: `08-B07` (version selection) — complete as code; full-sweep verification running
-- Last completed task: `08-A Requirements` (document catalog, agency policy, required-document rules, booking checklist, expiry-aware READY_FOR_PICKUP gate)
-- Last completed phase: `PHASE-07 Customer Platform & Marketplace`
+- Current phase: `PHASE-09` (Payments & Billing) — recon starting
+- Current workstream: `09-A Rental Payments` (payment intent model, cash payment, bank transfer evidence, pay-at-agency state, partial payments, deposit lifecycle, allocation model, manual confirmation workflow)
+- Current task: `09-A01` (payment intent model) — spec/deps analysis before first edit
+- Last completed task: `08-D07` (phase 08 gate) — PHASE-08 closed
+- Last completed phase: `PHASE-08 Contracts & Documents` (08-A requirements · 08-B templates · 08-C contracts/signatures/receipts/PDFs · 08-D secure documents)
 - Current attempt: `1`
-- Last validation: 08-B in verification — repo typecheck 0; eslint 0 on touched files; unit 526/526 (44 suites incl. template-rules 12 + templates.service 17); templates e2e 8/8 (JWKS 4171); api-client build 0; customer-web vitest 41/41; live HTTP smoke `scripts/qa-08b-templates-smoke.cjs` 21/21 (built-in defaults, code normalization, TEMPLATE_CODE_EXISTS/INVALID_TEMPLATE_VARIABLES, append-only v2, 08-B07 selection + ar→fr fallback, 401/403/404 isolation); full e2e sweep across all 29 suites running — 2026-09-03
-- Last known good commit: `f95dec7` (feat 08-B) on `arena/01a05097-car-rental-platform` (pushed to origin)
-- Environment note: the sandbox reset (2026-09-03) wiped node_modules + PostgreSQL data and reverted the branch to `e534d20`; recovered via `git fetch origin arena/01a05097-car-rental-platform` + `git reset --mixed FETCH_HEAD`, `npm install`, `scripts/local-pg.cjs start`, re-created both DBs and `migrate deploy` — the fresh deploy exposed and repaired comment-semicolon defects in 5 older migration files (see EVIDENCE_LOG 08-A)
-- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts` — unsafe-assignment/member-access/require-await/unbound-method; 22 of them in `bookings.service.spec.ts`); not part of this delta, will be cleaned in a dedicated lint sweep
+- Last validation (PHASE-08 gate): contracts e2e 12/12 (JWKS 4172); reproducibility specs (rules + pdf-layout + pdf-renderer) 29/29; full unit 586/586 (49 suites); full e2e 246/246 (30 suites); repo typecheck 0; eslint 0 on all touched files; live smoke `scripts/qa-08c-contracts-smoke.cjs` 38/38 over HTTP; DBs at migration #25 with `document_access_events`/`generated_documents` registered — 2026-09-04
+- Last known good commit: `1b8bd57` (docs(08-D) evidence checkpoint) on `arena/01a05097-car-rental-platform` (pushed to origin)
+- Environment note: three sandbox resets during PHASE-08 — each recovered with the established recipe (`git fetch origin arena/…` + `git reset --mixed FETCH_HEAD` preserves the worktree, `npm install`, `local-pg start`, DB re-create + `migrate deploy`, `npm run db:generate`, config rebuild, dev-jwks + preview API restart). The Prisma CLI cannot reach binaries.prisma.sh from Node's TLS in this sandbox; migrations use the offline generator script + hand-written SQL per scripts/db-migrate-create.cjs — the canonical flow remains documented for networked machines.
+- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts`); not part of the PHASE-08 delta, kept for a dedicated lint sweep
 - Blocker: none
-- Next action: finish the 08-B full-sweep verification, record evidence, then PHASE-08 / 08-C Contract/Receipt (rental contract aggregate + snapshot 08-C01/08-C02 via `TemplatesService.renderForTenant`, signature boundary 08-C03, PDF rendering 08-C04, receipts 08-C05)
-- Last updated: 2026-09-03
+- Next action: PHASE-09 / 09-A recon — read the payments spec (docs/43 payment strategy, WBS 09-A), the existing pricing/quote/booking money boundaries, then implement 09-A01 atomically (schema → domain → repository → service → controller → tests → evidence)
+- Last updated: 2026-09-04
 
 ## Canonical execution model
 
@@ -71,6 +71,10 @@ A new agent/session must read this file first, then the WBS and active task spec
 `PHASE-08 / 08-B / verification → 08-C`
 
 ## Phase 08 progress (Contracts & Documents)
+
+## Phase 08 result (Contracts & Documents)
+
+Workstream 08-C Contract/Receipt is complete (checkpoint commits `622fa9f` schema+feature, `ecdf0af` e2e/api-client, `88acc5f` smoke): the rental contract aggregate with the immutable rendered snapshot (template code/version/locale/variables/contentHash — historical signed documents stay reproducible), the signature boundary (server-attested snapshot hash, CUSTOMER-role booking-customer binding, signed-PDF regeneration), the byte-deterministic Amiri-based Arabic/French/English PDF pipeline (SIL OFL font shipped with license), receipts tracing the confirmation price snapshot, and tenant/user-scoped signed-URL downloads. Workstream 08-D Secure Documents is complete (checkpoint commits `d57fb88` feature + `1b8bd57` evidence): audited signed-URL issuance (URL_ISSUED events with STAFF/CUSTOMER channel and actor), append-only `document_access_events` (migration #25), retention horizons stamped at creation (`DOCUMENT_RETENTION_YEARS`), staff revocation/restore with `DOCUMENT_ACCESS_REVOKED`/`DOCUMENT_REVOKE_STATE` guards preserving historical rows, and configurable URL TTL. The phase gate 08-05 passed: contracts e2e 12/12 + reproducibility specs 29/29 + full unit 586/586 + full e2e 246/246 + live smoke 38/38 — signed/history records reproduce correctly and unauthorized document access is denied (401/403/404/409 verified across surfaces). Next: PHASE-09 Payments & Billing.
 
 Workstream 08-A Requirements is complete.
 Workstream 08-B Templates is implemented (schema `8f21180`, feature `f95dec7`): versioned `document_templates`/`document_template_versions` (migration #22, append-only releases), built-in ar/fr/en contract content, whitelisted variable substitution with locale-aware formatting, effective-date version selection with the ar→fr→en fallback chain, `contract.read`/`contract.manage` permissions in the agency role bundles and docs/37, and the typed api-client surface. Verification: templates e2e 8/8 + live smoke 21/21; full regression sweep in progress.
