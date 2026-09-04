@@ -57,6 +57,9 @@ model User {
   signedContracts  ContractSignature[] @relation("ContractSigner")
   documentAccesses DocumentAccessEvent[] @relation("DocumentAccessActor")
   revokedDocuments GeneratedDocument[]  @relation("DocumentRevoker")
+  recordedPayments PaymentRecord[]     @relation("PaymentRecorder")
+  confirmedPayments PaymentRecord[]    @relation("PaymentConfirmer")
+  releasedDeposits DepositHold[]       @relation("DepositReleaser")
 
   @@map("users")
 }
@@ -128,6 +131,9 @@ model Tenant {
   documentTemplates DocumentTemplate[]
   rentalContracts   RentalContract[]
   receipts          Receipt[]
+  paymentIntents    PaymentIntent[]
+  paymentRecords    PaymentRecord[]
+  depositHolds      DepositHold[]
   generatedDocuments GeneratedDocument[]
 
   @@map("tenants")
@@ -566,6 +572,8 @@ model Booking {
   idempotencyRecords  BookingIdempotencyRecord[]
   contract            RentalContract?
   receipt             Receipt?
+  paymentIntent       PaymentIntent?
+  depositHold         DepositHold?
   generatedDocuments  GeneratedDocument[]            @relation("BookingGeneratedDocument")
 
   @@unique([tenantId, bookingNumber])
@@ -1001,6 +1009,113 @@ model DepositPolicyScope {
   category      VehicleCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@map("deposit_policy_scopes")
+}
+
+// ─────────────────────────── PHASE-09 payments ────────────────────────────
+
+/// 09-A01/09-A04: the booking's financial state. Amounts are copied from
+/// the immutable booking price snapshot (never client-supplied); the
+/// status is recomputed on every record mutation, and the outstanding
+/// balance is always derived from the authoritative confirmed records.
+enum PaymentIntentStatus {
+  OPEN
+  PARTIALLY_SETTLED
+  SETTLED
+}
+
+/// 09-A02/09-A03: manual payment methods for Release 1 — cash, bank
+/// transfer with evidence/reference, and other manually recorded methods.
+/// Online provider methods land with 09-D adapters (R2+ optional).
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER_MANUAL
+}
+
+/// 09-A08: manual confirmation workflow — records enter pending and a
+/// staff member confirms the money; voiding is append-only (confirmed
+/// records are never deleted — corrections use refunds, 09-C).
+enum PaymentRecordStatus {
+  PENDING_CONFIRMATION
+  CONFIRMED
+  VOIDED
+}
+
+/// 09-A06: deposit lifecycle. The deposit is held separately from rental
+/// revenue (06-C08); the hold releases at return settlement and refunds
+/// or forfeits through the 09-C flows.
+enum DepositHoldStatus {
+  HELD
+  RELEASED
+  REFUNDED
+  FORFEITED
+}
+
+/// 09-A01: one per booking — the payment expectation ledger.
+model PaymentIntent {
+  id           String              @id @default(uuid()) @db.Uuid
+  tenantId     String              @db.Uuid
+  bookingId    String              @unique @db.Uuid
+  currency     String
+  totalMinor   Int
+  depositMinor Int                 @default(0)
+  status       PaymentIntentStatus @default(OPEN)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking      Booking             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  records      PaymentRecord[]
+  depositHold  DepositHold?
+
+  @@index([tenantId, status])
+  @@map("payment_intents")
+}
+
+/// 09-A02/09-A03/09-A05/09-A08: one auditable record per payment action.
+/// Integer minor units only (docs/06 financial integrity); the balance is
+/// the sum of CONFIRMED records against the snapshot totals.
+model PaymentRecord {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @db.Uuid
+  intentId      String              @db.Uuid
+  method        PaymentMethod
+  amountMinor   Int
+  reference     String?
+  note          String?
+  status        PaymentRecordStatus @default(PENDING_CONFIRMATION)
+  recordedById  String?             @db.Uuid
+  confirmedById String?             @db.Uuid
+  confirmedAt   DateTime?
+  createdAt     DateTime            @default(now())
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  intent        PaymentIntent       @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  recordedBy    User?               @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  confirmedBy   User?               @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+
+  @@index([intentId, createdAt])
+  @@map("payment_records")
+}
+
+/// 09-A06: the deposit hold lifecycle — held at intent creation when the
+/// snapshot carries a deposit, released at return settlement.
+model DepositHold {
+  id           String            @id @default(uuid()) @db.Uuid
+  tenantId     String            @db.Uuid
+  intentId     String            @unique @db.Uuid
+  bookingId    String            @unique @db.Uuid
+  amountMinor  Int
+  status       DepositHoldStatus @default(HELD)
+  releasedById String?           @db.Uuid
+  releasedAt   DateTime?
+  note         String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  intent       PaymentIntent     @relation(fields: [intentId], references: [id], onDelete: Cascade)
+  booking      Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  releasedBy   User?             @relation("DepositReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  @@map("deposit_holds")
 }
 
 enum VehicleStatus {
