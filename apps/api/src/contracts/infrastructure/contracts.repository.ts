@@ -226,6 +226,22 @@ export class ContractsRepository {
     });
   }
 
+  /** User-scoped generated document (me-portal 08-C06): own contracts/receipts only. */
+  async findGeneratedDocumentForUser(
+    userId: string,
+    documentId: string,
+  ): Promise<GeneratedDocument | null> {
+    return this.prisma.generatedDocument.findFirst({
+      where: {
+        id: documentId,
+        OR: [
+          { contract: { booking: { customer: { userId } } } },
+          { receipt: { booking: { customer: { userId } } } },
+        ],
+      },
+    });
+  }
+
   async findVerifiedLicense(customerId: string): Promise<{ number: string | null } | null> {
     return this.prisma.customerDocument.findFirst({
       where: { customerId, type: 'DRIVER_LICENSE', status: 'VERIFIED' },

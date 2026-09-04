@@ -136,15 +136,22 @@ export class ContractsService {
     }
 
     const now = new Date();
+    const contractNumber = contractNumberOf(booking.bookingNumber);
+    // The contract number and issuance date are part of the rendered
+    // content itself, so they join the values BEFORE the strict render.
+    const values = {
+      ...assembled.values,
+      CONTRACT_NUMBER: contractNumber,
+      CONTRACT_DATE: now,
+    };
     const rendered = await this.templates.renderForTenant(tenantId, 'RENTAL_CONTRACT', {
       locale,
       asOf: now,
-      values: assembled.values,
+      values,
     });
 
-    const contractNumber = contractNumberOf(booking.bookingNumber);
     const contentHash = contentHashOf(rendered.body);
-    const variablesJson = this.toJson(assembled.values);
+    const variablesJson = this.toJson(values);
 
     // Render the PDF before writing anything so a render failure leaves
     // no half-issued contract behind (clean retry).
@@ -494,24 +501,14 @@ export class ContractsService {
   }
 
   async downloadDocumentForUser(userId: string, documentId: string): Promise<ContractDownloadResponse> {
-    const contract = await this.repository.findContractForUser(userId, documentId);
-    if (contract) {
-      const document = contract.documents.find((candidate) => candidate.id === documentId);
-      if (document) {
-        return this.toDownloadResponse(document);
-      }
+    const document = await this.repository.findGeneratedDocumentForUser(userId, documentId);
+    if (!document) {
+      throw new NotFoundException({
+        code: ContractsErrorCode.CONTRACT_DOCUMENT_NOT_FOUND,
+        message: 'Document not found.',
+      });
     }
-    const receipt = await this.repository.findReceiptForUser(userId, documentId);
-    if (receipt) {
-      const document = receipt.documents.find((candidate) => candidate.id === documentId);
-      if (document) {
-        return this.toDownloadResponse(document);
-      }
-    }
-    throw new NotFoundException({
-      code: ContractsErrorCode.CONTRACT_DOCUMENT_NOT_FOUND,
-      message: 'Document not found.',
-    });
+    return this.toDownloadResponse(document);
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -696,6 +693,7 @@ export class ContractsService {
             templateCode: snapshot.templateCode,
             templateVersion: snapshot.templateVersion,
             locale: snapshot.locale,
+            title: snapshot.title,
             variables,
             contentHash: snapshot.contentHash,
             contentText: snapshot.contentText,

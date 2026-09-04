@@ -12,6 +12,21 @@ export {
   TemplateVersionInput,
 } from './endpoints/templates';
 export {
+  ContractDocumentDto,
+  ContractDownloadResponseDto,
+  ContractListResponseDto,
+  ContractResponseDto,
+  ContractsApi,
+  ContractSignatureDto,
+  ContractSignatureInput,
+  ContractSnapshotDto,
+  createContractsApi,
+  createMeContractsApi,
+  MeContractsApi,
+  ReceiptListResponseDto,
+  ReceiptResponseDto,
+} from './endpoints/contracts';
+export {
   createFleetApi,
   VehicleCategoryDto,
   VehicleDto,

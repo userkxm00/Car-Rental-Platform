@@ -21,6 +21,7 @@ export interface ContractSnapshotResponse {
   templateCode: string;
   templateVersion: number | null;
   locale: string;
+  title: string;
   variables: Record<string, string | number | null>;
   contentHash: string;
   contentText: string;

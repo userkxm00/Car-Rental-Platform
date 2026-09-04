@@ -91,8 +91,8 @@ interface Mocks {
   createReceipt: jest.Mock;
   createGeneratedDocument: jest.Mock;
   renderForTenant: jest.Mock;
-  uploadDocument: jest.Mock;
-  createSignedDownloadUrl: jest.Mock;
+  uploadDocument: jest.MockedFunction<ObjectStorage['uploadDocument']>;
+  createSignedDownloadUrl: jest.MockedFunction<ObjectStorage['createSignedDownloadUrl']>;
 }
 
 function buildMocks(): Mocks {
@@ -113,8 +113,8 @@ function buildMocks(): Mocks {
     createReceipt: jest.fn(),
     createGeneratedDocument: jest.fn(),
     renderForTenant: jest.fn(),
-    uploadDocument: jest.fn(),
-    createSignedDownloadUrl: jest.fn(),
+    uploadDocument: jest.fn() as jest.MockedFunction<ObjectStorage['uploadDocument']>,
+    createSignedDownloadUrl: jest.fn() as jest.MockedFunction<ObjectStorage['createSignedDownloadUrl']>,
   };
 }
 
@@ -220,7 +220,7 @@ describe('ContractsService (08-C)', () => {
       expect(mocks.renderForTenant).toHaveBeenCalledWith(
         't1',
         'RENTAL_CONTRACT',
-        expect.objectContaining({ locale: 'fr', values: expect.objectContaining({ RENTAL_AMOUNT: 45000 }) }),
+        expect.objectContaining({ locale: 'fr', values: expect.objectContaining({ RENTAL_AMOUNT: 45000 }) }) as never,
       );
       expect(mocks.createSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -230,11 +230,7 @@ describe('ContractsService (08-C)', () => {
           title: 'Contrat de location de véhicule',
         }),
       );
-      const upload = (
-        mocks.uploadDocument.mock.calls as unknown as Array<
-          Array<{ kind: string; contentType: string; data: Buffer }>
-        >
-      )[0][0];
+      const upload = mocks.uploadDocument.mock.calls[0][0];
       expect(upload.kind).toBe('contract');
       expect(upload.contentType).toBe('application/pdf');
       expect(Buffer.from(upload.data).subarray(0, 5).toString()).toBe('%PDF-');
@@ -453,13 +449,9 @@ describe('ContractsService (08-C)', () => {
         expect.objectContaining({
           receiptNumber: 'RT-BN-2026-0042',
           contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-        }),
+        }) as never,
       );
-      const upload = (
-        mocks.uploadDocument.mock.calls as unknown as Array<
-          Array<{ kind: string; contentType: string; data: Buffer }>
-        >
-      )[0][0];
+      const upload = mocks.uploadDocument.mock.calls[0][0];
       expect(upload.kind).toBe('receipt');
       expect(response.totals).toEqual({ currency: 'DZD', totalMinor: 45000, depositMinor: 10000 });
     });
