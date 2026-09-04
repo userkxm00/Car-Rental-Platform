@@ -1,15 +1,17 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import type { AppEnv } from '@kavriqo/config';
+import { APP_ENV } from '../../config/app-env.token';
 import { TemplatesService } from '../../templates/application/templates.service';
 import type { TemplateLocale } from '../../templates/domain/template-rules';
 import { substituteTemplate } from '../../templates/domain/template-rules';
 import { ObjectStorage } from '../../media/ports/object-storage.port';
-import { SIGNED_URL_TTL_SECONDS } from '../../media/domain/media-rules';
 import { buildContractValues } from '../domain/contract-values';
 import {
   contentHashOf,
   contractNumberOf,
   ContractsErrorCode,
+  isDocumentAccessible,
   isIssuableBookingStatus,
   isSignatureMethod,
   isSignerRole,
@@ -17,6 +19,7 @@ import {
   receiptNumberOf,
   RECEIPT_CONTENT,
   resolveContractLocale,
+  retentionUntil,
   SIGNATURE_NOTE_MAX,
   SIGNER_NAME_MAX,
 } from '../domain/contracts.rules';
@@ -25,6 +28,7 @@ import type {
   ContractListResponse,
   ContractResponse,
   ContractSignatureInput,
+  DocumentAccessHistoryResponse,
   ReceiptListResponse,
   ReceiptResponse,
 } from '../domain/contracts.contract';
@@ -64,6 +68,7 @@ export class ContractsService {
     private readonly repository: ContractsRepository,
     private readonly templates: TemplatesService,
     private readonly storage: ObjectStorage,
+    @Inject(APP_ENV) private readonly env: AppEnv,
   ) {}
 
   // ── issuance (08-C01/08-C02/08-C04) ───────────────────────────────────────
@@ -202,6 +207,7 @@ export class ContractsService {
       objectKey,
       contentType: PDF_CONTENT_TYPE,
       sizeBytes: pdf.length,
+      retainUntil: this.retentionFor(now),
     });
 
     return this.contractResponse(tenantId, contract.id);
@@ -460,6 +466,7 @@ export class ContractsService {
       objectKey,
       contentType: PDF_CONTENT_TYPE,
       sizeBytes: pdf.length,
+      retainUntil: this.retentionFor(now),
     });
 
     return this.receiptResponse(tenantId, receipt.id);
@@ -487,9 +494,18 @@ export class ContractsService {
     };
   }
 
-  // ── download (08-C06) ──────────────────────────────────────────────────────
+  // ── downloads (08-C06) + secure access lifecycle (08-D) ───────────────────
 
-  async downloadDocument(tenantId: string, documentId: string): Promise<ContractDownloadResponse> {
+  /**
+   * Staff download (08-D01/08-D03): tenant-scoped lookup, revocation
+   * guard, then an audited signed-URL issuance (the issuance IS the
+   * access grant, so the event is recorded server-side).
+   */
+  async downloadDocument(
+    tenantId: string,
+    documentId: string,
+    actorUserId: string | null,
+  ): Promise<ContractDownloadResponse> {
     const document = await this.repository.findGeneratedDocument(tenantId, documentId);
     if (!document) {
       throw new NotFoundException({
@@ -497,9 +513,10 @@ export class ContractsService {
         message: 'Document not found in this agency.',
       });
     }
-    return this.toDownloadResponse(document);
+    return this.issueSignedUrl(document, 'STAFF', actorUserId);
   }
 
+  /** Customer download: own bookings only, channel CUSTOMER (08-D01/08-D03). */
   async downloadDocumentForUser(userId: string, documentId: string): Promise<ContractDownloadResponse> {
     const document = await this.repository.findGeneratedDocumentForUser(userId, documentId);
     if (!document) {
@@ -508,10 +525,106 @@ export class ContractsService {
         message: 'Document not found.',
       });
     }
-    return this.toDownloadResponse(document);
+    return this.issueSignedUrl(document, 'CUSTOMER', userId);
+  }
+
+  /** 08-D05: staff revocation stops further URL issuance; the row stays. */
+  async revokeDocument(
+    tenantId: string,
+    documentId: string,
+    actorUserId: string | null,
+  ): Promise<ContractDownloadResponse> {
+    const existing = await this.repository.findGeneratedDocument(tenantId, documentId);
+    if (!existing) {
+      throw new NotFoundException({
+        code: ContractsErrorCode.CONTRACT_DOCUMENT_NOT_FOUND,
+        message: 'Document not found in this agency.',
+      });
+    }
+    if (existing.revokedAt !== null) {
+      throw new ConflictException({
+        code: ContractsErrorCode.DOCUMENT_REVOKE_STATE,
+        message: 'Document access is already revoked.',
+      });
+    }
+    const document = await this.repository.setDocumentRevoked(
+      tenantId,
+      documentId,
+      actorUserId,
+      new Date(),
+    );
+    await this.repository.createDocumentAccessEvent({
+      tenantId,
+      documentId,
+      action: 'ACCESS_REVOKED',
+      channel: 'STAFF',
+      actorUserId,
+    });
+    // Status-only response: no signed URL is minted by a revocation.
+    return this.toDocumentStatusResponse(document ?? existing);
+  }
+
+  /** 08-D05: restore re-enables signed-URL issuance (audited). */
+  async restoreDocument(
+    tenantId: string,
+    documentId: string,
+    actorUserId: string | null,
+  ): Promise<ContractDownloadResponse> {
+    const existing = await this.repository.findGeneratedDocument(tenantId, documentId);
+    if (!existing) {
+      throw new NotFoundException({
+        code: ContractsErrorCode.CONTRACT_DOCUMENT_NOT_FOUND,
+        message: 'Document not found in this agency.',
+      });
+    }
+    if (existing.revokedAt === null) {
+      throw new ConflictException({
+        code: ContractsErrorCode.DOCUMENT_REVOKE_STATE,
+        message: 'Document access is not revoked.',
+      });
+    }
+    const document = await this.repository.setDocumentRestored(tenantId, documentId);
+    await this.repository.createDocumentAccessEvent({
+      tenantId,
+      documentId,
+      action: 'ACCESS_RESTORED',
+      channel: 'STAFF',
+      actorUserId,
+    });
+    return this.toDocumentStatusResponse(document ?? existing);
+  }
+
+  /** 08-D03: the append-only access trail for one generated document. */
+  async listDocumentAccessHistory(
+    tenantId: string,
+    documentId: string,
+  ): Promise<DocumentAccessHistoryResponse> {
+    const document = await this.repository.findGeneratedDocument(tenantId, documentId);
+    if (!document) {
+      throw new NotFoundException({
+        code: ContractsErrorCode.CONTRACT_DOCUMENT_NOT_FOUND,
+        message: 'Document not found in this agency.',
+      });
+    }
+    const events = await this.repository.listDocumentAccessEvents(tenantId, documentId);
+    return {
+      documentId,
+      events: events.map((event) => ({
+        id: event.id,
+        action: event.action,
+        channel: event.channel,
+        actorUserId: event.actorUserId,
+        createdAt: event.createdAt.toISOString(),
+      })),
+    };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
+
+  /** Retention horizon fixed at PDF creation (08-D04). */
+  private retentionFor(now: Date): Date {
+    return retentionUntil(now, this.env.DOCUMENT_RETENTION_YEARS);
+  }
 
   private resolveLocale(requested: string | undefined, preferred: string | null): TemplateLocale {
     if (requested !== undefined && !['ar', 'fr', 'en'].includes(requested)) {
@@ -591,6 +704,7 @@ export class ContractsService {
       objectKey,
       contentType: PDF_CONTENT_TYPE,
       sizeBytes: pdf.length,
+      retainUntil: this.retentionFor(new Date()),
     });
   }
 
@@ -598,14 +712,61 @@ export class ContractsService {
     return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
   }
 
-  private async toDownloadResponse(document: GeneratedDocument): Promise<ContractDownloadResponse> {
-    const url = await this.storage.createSignedDownloadUrl(document.objectKey, SIGNED_URL_TTL_SECONDS);
+  /** Signed-URL lifetime (08-D02), configurable per environment. */
+  private ttlSeconds(): number {
+    return this.env.GENERATED_DOCUMENT_URL_TTL_SECONDS;
+  }
+
+  /**
+   * The guarded, audited signed-URL issuance (08-D01/08-D02/08-D03):
+   * revoked documents are refused before any event is recorded or URL
+   * minted.
+   */
+  private async issueSignedUrl(
+    document: GeneratedDocument,
+    channel: 'STAFF' | 'CUSTOMER',
+    actorUserId: string | null,
+  ): Promise<ContractDownloadResponse> {
+    if (!isDocumentAccessible(document)) {
+      throw new ConflictException({
+        code: ContractsErrorCode.DOCUMENT_ACCESS_REVOKED,
+        message: 'Document access has been revoked.',
+      });
+    }
+    await this.repository.createDocumentAccessEvent({
+      tenantId: document.tenantId,
+      documentId: document.id,
+      action: 'URL_ISSUED',
+      channel,
+      actorUserId,
+    });
+    return this.toDownloadResponse(document);
+  }
+
+  /** Status payload for revoke/restore: metadata only, url always null (08-D05). */
+  private toDocumentStatusResponse(document: GeneratedDocument): ContractDownloadResponse {
     return {
-      url,
-      expiresAt: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
+      url: null,
+      expiresAt: null,
       contentType: document.contentType,
       sizeBytes: document.sizeBytes,
       title: document.title,
+      retainUntil: document.retainUntil?.toISOString() ?? null,
+      revokedAt: document.revokedAt?.toISOString() ?? null,
+    };
+  }
+
+  private async toDownloadResponse(document: GeneratedDocument): Promise<ContractDownloadResponse> {
+    const ttl = this.ttlSeconds();
+    const url = await this.storage.createSignedDownloadUrl(document.objectKey, ttl);
+    return {
+      url,
+      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
+      contentType: document.contentType,
+      sizeBytes: document.sizeBytes,
+      title: document.title,
+      retainUntil: document.retainUntil?.toISOString() ?? null,
+      revokedAt: document.revokedAt?.toISOString() ?? null,
     };
   }
 
@@ -640,7 +801,14 @@ export class ContractsService {
       contentText: receipt.contentText,
       createdAt: receipt.createdAt.toISOString(),
       document: document
-        ? { id: document.id, title: document.title, contentType: document.contentType, sizeBytes: document.sizeBytes }
+        ? {
+            id: document.id,
+            title: document.title,
+            contentType: document.contentType,
+            sizeBytes: document.sizeBytes,
+            retainUntil: document.retainUntil?.toISOString() ?? null,
+            revokedAt: document.revokedAt?.toISOString() ?? null,
+          }
         : null,
     };
   }
@@ -712,7 +880,14 @@ export class ContractsService {
           }
         : null,
       document: document
-        ? { id: document.id, title: document.title, contentType: document.contentType, sizeBytes: document.sizeBytes }
+        ? {
+            id: document.id,
+            title: document.title,
+            contentType: document.contentType,
+            sizeBytes: document.sizeBytes,
+            retainUntil: document.retainUntil?.toISOString() ?? null,
+            revokedAt: document.revokedAt?.toISOString() ?? null,
+          }
         : null,
     };
   }

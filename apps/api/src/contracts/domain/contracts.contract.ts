@@ -43,6 +43,10 @@ export interface ContractDocumentResponse {
   title: string;
   contentType: string;
   sizeBytes: number;
+  /** Retention horizon fixed at creation (08-D04). */
+  retainUntil: string | null;
+  /** Set when a staff revocation stops further URL issuance (08-D05). */
+  revokedAt: string | null;
 }
 
 export interface ContractResponse {
@@ -76,11 +80,32 @@ export interface ReceiptResponse {
 }
 
 export interface ContractDownloadResponse {
-  url: string;
-  expiresAt: string;
+  /** Signed URL — null on revocation status responses (08-D05). */
+  url: string | null;
+  /** null whenever url is null (revoke/restore status payloads). */
+  expiresAt: string | null;
   contentType: string;
   sizeBytes: number;
   title: string;
+  /** Retention horizon fixed at creation (08-D04). */
+  retainUntil: string | null;
+  /** Set when a staff revocation stops further URL issuance (08-D05). */
+  revokedAt: string | null;
+}
+
+export type DocumentAccessAction = 'URL_ISSUED' | 'ACCESS_REVOKED' | 'ACCESS_RESTORED';
+
+export interface DocumentAccessEventResponse {
+  id: string;
+  action: DocumentAccessAction;
+  channel: 'STAFF' | 'CUSTOMER';
+  actorUserId: string | null;
+  createdAt: string;
+}
+
+export interface DocumentAccessHistoryResponse {
+  documentId: string;
+  events: DocumentAccessEventResponse[];
 }
 
 export interface ContractListResponse {

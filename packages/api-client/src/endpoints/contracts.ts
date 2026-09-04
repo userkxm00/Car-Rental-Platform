@@ -34,6 +34,8 @@ export interface ContractDocumentDto {
   title: string;
   contentType: string;
   sizeBytes: number;
+  retainUntil: string | null;
+  revokedAt: string | null;
 }
 
 export interface ContractResponseDto {
@@ -78,11 +80,26 @@ export interface ReceiptListResponseDto {
 }
 
 export interface ContractDownloadResponseDto {
-  url: string;
-  expiresAt: string;
+  url: string | null;
+  expiresAt: string | null;
   contentType: string;
   sizeBytes: number;
   title: string;
+  retainUntil: string | null;
+  revokedAt: string | null;
+}
+
+export type DocumentAccessActionDto = 'URL_ISSUED' | 'ACCESS_REVOKED' | 'ACCESS_RESTORED';
+
+export interface DocumentAccessHistoryResponseDto {
+  documentId: string;
+  events: Array<{
+    id: string;
+    action: DocumentAccessActionDto;
+    channel: 'STAFF' | 'CUSTOMER';
+    actorUserId: string | null;
+    createdAt: string;
+  }>;
 }
 
 export interface ContractsApi {
@@ -100,8 +117,14 @@ export interface ContractsApi {
   listReceipts(agencyId: string): Promise<ReceiptListResponseDto>;
   /** GET /agencies/:agencyId/receipts/:receiptId. */
   getReceipt(agencyId: string, receiptId: string): Promise<ReceiptResponseDto>;
-  /** GET /agencies/:agencyId/documents/:documentId/url. */
+  /** GET /agencies/:agencyId/documents/:documentId/url (records a URL_ISSUED event). */
   downloadUrl(agencyId: string, documentId: string): Promise<ContractDownloadResponseDto>;
+  /** POST /agencies/:agencyId/documents/:documentId/revoke (08-D05). */
+  revoke(agencyId: string, documentId: string): Promise<ContractDownloadResponseDto>;
+  /** POST /agencies/:agencyId/documents/:documentId/restore (08-D05). */
+  restore(agencyId: string, documentId: string): Promise<ContractDownloadResponseDto>;
+  /** GET /agencies/:agencyId/documents/:documentId/access-history (08-D03). */
+  accessHistory(agencyId: string, documentId: string): Promise<DocumentAccessHistoryResponseDto>;
 }
 
 export interface MeContractsApi {
@@ -130,6 +153,9 @@ export function createContractsApi(client: ApiClient): ContractsApi {
     listReceipts: (agencyId) => client.get(`${base(agencyId)}/receipts`),
     getReceipt: (agencyId, receiptId) => client.get(`${base(agencyId)}/receipts/${receiptId}`),
     downloadUrl: (agencyId, documentId) => client.get(`${base(agencyId)}/documents/${documentId}/url`),
+    revoke: (agencyId, documentId) => client.post(`${base(agencyId)}/documents/${documentId}/revoke`, {}),
+    restore: (agencyId, documentId) => client.post(`${base(agencyId)}/documents/${documentId}/restore`, {}),
+    accessHistory: (agencyId, documentId) => client.get(`${base(agencyId)}/documents/${documentId}/access-history`),
   };
 }
 

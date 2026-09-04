@@ -15,6 +15,8 @@ export {
   ContractDocumentDto,
   ContractDownloadResponseDto,
   ContractListResponseDto,
+  DocumentAccessActionDto,
+  DocumentAccessHistoryResponseDto,
   ContractResponseDto,
   ContractsApi,
   ContractSignatureDto,

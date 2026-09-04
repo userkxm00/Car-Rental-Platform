@@ -213,6 +213,8 @@ export class ContractsRepository {
     objectKey: string;
     contentType: string;
     sizeBytes: number;
+    /** Fixed at creation (08-D04); never updated afterwards. */
+    retainUntil?: Date | null;
   }): Promise<GeneratedDocument> {
     return this.prisma.generatedDocument.create({ data: input });
   }
@@ -223,6 +225,65 @@ export class ContractsRepository {
   ): Promise<GeneratedDocument | null> {
     return this.prisma.generatedDocument.findFirst({
       where: { id: documentId, tenantId },
+    });
+  }
+
+  /** Revocation (08-D05): the row must belong to this tenant first. */
+  async setDocumentRevoked(
+    tenantId: string,
+    documentId: string,
+    revokedById: string | null,
+    at: Date,
+  ): Promise<GeneratedDocument | null> {
+    const existing = await this.findGeneratedDocument(tenantId, documentId);
+    if (!existing) {
+      return null;
+    }
+    return this.prisma.generatedDocument.update({
+      where: { id: documentId },
+      data: { revokedAt: at, revokedById },
+    });
+  }
+
+  async setDocumentRestored(
+    tenantId: string,
+    documentId: string,
+  ): Promise<GeneratedDocument | null> {
+    const existing = await this.findGeneratedDocument(tenantId, documentId);
+    if (!existing) {
+      return null;
+    }
+    return this.prisma.generatedDocument.update({
+      where: { id: documentId },
+      data: { revokedAt: null, revokedById: null },
+    });
+  }
+
+  /** Append-only access audit (08-D03): signed-URL issuances and revocations. */
+  async createDocumentAccessEvent(input: {
+    tenantId: string;
+    documentId: string;
+    action: 'URL_ISSUED' | 'ACCESS_REVOKED' | 'ACCESS_RESTORED';
+    channel: 'STAFF' | 'CUSTOMER';
+    actorUserId: string | null;
+  }): Promise<void> {
+    await this.prisma.documentAccessEvent.create({ data: input });
+  }
+
+  async listDocumentAccessEvents(
+    tenantId: string,
+    documentId: string,
+  ): Promise<Array<{
+    id: string;
+    action: 'URL_ISSUED' | 'ACCESS_REVOKED' | 'ACCESS_RESTORED';
+    channel: 'STAFF' | 'CUSTOMER';
+    actorUserId: string | null;
+    createdAt: Date;
+  }>> {
+    return this.prisma.documentAccessEvent.findMany({
+      where: { tenantId, documentId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, action: true, channel: true, actorUserId: true, createdAt: true },
     });
   }
 

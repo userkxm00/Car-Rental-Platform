@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { HttpException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { GeneratedDocument, Prisma } from '@prisma/client';
+import type { AppEnv } from '@kavriqo/config';
 import { ContractsService } from './contracts.service';
 import { ContractsRepository, type BookingContractContext } from '../infrastructure/contracts.repository';
 import { TemplatesService } from '../../templates/application/templates.service';
@@ -83,6 +84,11 @@ interface Mocks {
   findReceiptByBooking: jest.Mock;
   findReceiptById: jest.Mock;
   findGeneratedDocument: jest.Mock;
+  findGeneratedDocumentForUser: jest.Mock;
+  setDocumentRevoked: jest.Mock;
+  setDocumentRestored: jest.Mock;
+  createDocumentAccessEvent: jest.Mock;
+  listDocumentAccessEvents: jest.Mock;
   findVerifiedLicense: jest.Mock;
   createContract: jest.Mock;
   createSnapshot: jest.Mock;
@@ -105,6 +111,11 @@ function buildMocks(): Mocks {
     findReceiptByBooking: jest.fn(),
     findReceiptById: jest.fn(),
     findGeneratedDocument: jest.fn(),
+    findGeneratedDocumentForUser: jest.fn(),
+    setDocumentRevoked: jest.fn(),
+    setDocumentRestored: jest.fn(),
+    createDocumentAccessEvent: jest.fn(),
+    listDocumentAccessEvents: jest.fn(),
     findVerifiedLicense: jest.fn(),
     createContract: jest.fn(),
     createSnapshot: jest.fn(),
@@ -134,6 +145,11 @@ function wireMocks(mocks: Mocks): {
     findReceiptByBooking: mocks.findReceiptByBooking,
     findReceiptById: mocks.findReceiptById,
     findGeneratedDocument: mocks.findGeneratedDocument,
+    findGeneratedDocumentForUser: mocks.findGeneratedDocumentForUser,
+    setDocumentRevoked: mocks.setDocumentRevoked,
+    setDocumentRestored: mocks.setDocumentRestored,
+    createDocumentAccessEvent: mocks.createDocumentAccessEvent,
+    listDocumentAccessEvents: mocks.listDocumentAccessEvents,
     findVerifiedLicense: mocks.findVerifiedLicense,
     createContract: mocks.createContract,
     createSnapshot: mocks.createSnapshot,
@@ -148,8 +164,12 @@ function wireMocks(mocks: Mocks): {
     uploadDocument: mocks.uploadDocument,
     createSignedDownloadUrl: mocks.createSignedDownloadUrl,
   } as unknown as ObjectStorage;
+  const appEnv = {
+    GENERATED_DOCUMENT_URL_TTL_SECONDS: 900,
+    DOCUMENT_RETENTION_YEARS: 10,
+  } as unknown as AppEnv;
 
-  const service = new ContractsService(repository, templates, storage);
+  const service = new ContractsService(repository, templates, storage, appEnv);
 
   let issuedId = 0;
   const issue = (overrides: Partial<BookingContractContext> = {}): IssuedContractRow => {
@@ -217,11 +237,11 @@ describe('ContractsService (08-C)', () => {
       const row = issue();
       const response = await service.issueContract('t1', 'b1', 'u-staff', {});
 
-      expect(mocks.renderForTenant).toHaveBeenCalledWith(
-        't1',
-        'RENTAL_CONTRACT',
-        expect.objectContaining({ locale: 'fr', values: expect.objectContaining({ RENTAL_AMOUNT: 45000 }) }) as never,
-      );
+      const expectedRender: unknown = expect.objectContaining({
+        locale: 'fr',
+        values: expect.objectContaining({ RENTAL_AMOUNT: 45000 }),
+      });
+      expect(mocks.renderForTenant).toHaveBeenCalledWith('t1', 'RENTAL_CONTRACT', expectedRender as never);
       expect(mocks.createSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
           templateCode: 'RENTAL_CONTRACT',
@@ -445,12 +465,11 @@ describe('ContractsService (08-C)', () => {
 
       const response = await service.generateReceipt('t1', 'b1', 'u-staff');
 
-      expect(mocks.createReceipt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          receiptNumber: 'RT-BN-2026-0042',
-          contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-        }) as never,
-      );
+      const expectedReceipt: unknown = expect.objectContaining({
+        receiptNumber: 'RT-BN-2026-0042',
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      });
+      expect(mocks.createReceipt).toHaveBeenCalledWith(expectedReceipt as never);
       const upload = mocks.uploadDocument.mock.calls[0][0];
       expect(upload.kind).toBe('receipt');
       expect(response.totals).toEqual({ currency: 'DZD', totalMinor: 45000, depositMinor: 10000 });
@@ -485,34 +504,173 @@ describe('ContractsService (08-C)', () => {
     });
   });
 
-  describe('downloads', () => {
+  describe('downloads (08-C06/08-D)', () => {
+    const activeDocument = (): GeneratedDocument => ({
+      id: 'doc1',
+      tenantId: 't1',
+      kind: 'RENTAL_CONTRACT',
+      bookingId: 'b1',
+      contractId: 'ct1',
+      receiptId: null,
+      locale: 'ar',
+      title: 'Contrat',
+      contentHash: 'h',
+      objectKey: 'private/t/contracts/x.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 2048,
+      retainUntil: new Date('2036-09-01T00:00:00Z'),
+      revokedAt: null,
+      revokedById: null,
+      createdAt: new Date('2026-09-01T00:00:00Z'),
+    });
+
     it('returns a short-lived signed URL for a generated document', async () => {
       const mocks = buildMocks();
       const { service } = wireMocks(mocks);
-      mocks.findGeneratedDocument.mockResolvedValue({
-        id: 'doc1',
-        objectKey: 'private/t/contracts/x.pdf',
-        contentType: 'application/pdf',
-        sizeBytes: 2048,
-        title: 'Contrat',
-      });
+      mocks.findGeneratedDocument.mockResolvedValue(activeDocument());
       mocks.createSignedDownloadUrl.mockResolvedValue('https://r2.test/signed');
 
-      const response = await service.downloadDocument('t1', 'doc1');
+      const response = await service.downloadDocument('t1', 'doc1', 'u-staff');
 
-      expect(mocks.createSignedDownloadUrl).toHaveBeenCalledWith(
-        'private/t/contracts/x.pdf',
-        expect.any(Number),
-      );
+      expect(mocks.createSignedDownloadUrl).toHaveBeenCalledWith('private/t/contracts/x.pdf', 900);
       expect(response.url).toBe('https://r2.test/signed');
-      expect(new Date(response.expiresAt).getTime()).toBeGreaterThan(Date.now());
+      expect(response.expiresAt).not.toBeNull();
+      expect(new Date(response.expiresAt as string).getTime()).toBeGreaterThan(Date.now());
+      expect(response.retainUntil).toBe('2036-09-01T00:00:00.000Z');
+      expect(response.revokedAt).toBeNull();
     });
 
-    it('404s for unknown documents', async () => {
+    it('records a STAFF URL_ISSUED access event for staff downloads (08-D03)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      mocks.findGeneratedDocument.mockResolvedValue(activeDocument());
+      mocks.createSignedDownloadUrl.mockResolvedValue('https://r2.test/signed');
+
+      await service.downloadDocument('t1', 'doc1', 'u-staff');
+
+      expect(mocks.createDocumentAccessEvent).toHaveBeenCalledWith({
+        tenantId: 't1',
+        documentId: 'doc1',
+        action: 'URL_ISSUED',
+        channel: 'STAFF',
+        actorUserId: 'u-staff',
+      });
+    });
+
+    it('records a CUSTOMER URL_ISSUED access event for me-portal downloads (08-D03)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      mocks.findGeneratedDocumentForUser.mockResolvedValue(activeDocument());
+      mocks.createSignedDownloadUrl.mockResolvedValue('https://r2.test/signed');
+
+      await service.downloadDocumentForUser('u-cust', 'doc1');
+
+      expect(mocks.createDocumentAccessEvent).toHaveBeenCalledWith({
+        tenantId: 't1',
+        documentId: 'doc1',
+        action: 'URL_ISSUED',
+        channel: 'CUSTOMER',
+        actorUserId: 'u-cust',
+      });
+    });
+
+    it('refuses URL issuance for revoked documents (08-D05)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      mocks.findGeneratedDocument.mockResolvedValue({
+        ...activeDocument(),
+        revokedAt: new Date('2026-09-02T00:00:00Z'),
+        revokedById: 'u-admin',
+      });
+
+      expect(await codeOf(service.downloadDocument('t1', 'doc1', 'u-staff'))).toBe(
+        ContractsErrorCode.DOCUMENT_ACCESS_REVOKED,
+      );
+      expect(mocks.createDocumentAccessEvent).not.toHaveBeenCalled();
+      expect(mocks.createSignedDownloadUrl).not.toHaveBeenCalled();
+    });
+
+    it('revokes and restores with audit events (08-D03/08-D05)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      const revoked = {
+        ...activeDocument(),
+        revokedAt: new Date('2026-09-02T00:00:00Z'),
+        revokedById: 'u-admin',
+      };
+      mocks.findGeneratedDocument
+        .mockResolvedValueOnce(activeDocument())
+        .mockResolvedValueOnce(revoked);
+      mocks.setDocumentRevoked.mockResolvedValue(revoked);
+      mocks.setDocumentRestored.mockResolvedValue(activeDocument());
+
+      const revokedResponse = await service.revokeDocument('t1', 'doc1', 'u-admin');
+      expect(revokedResponse.url).toBeNull();
+      expect(revokedResponse.revokedAt).toBe('2026-09-02T00:00:00.000Z');
+      expect(mocks.createDocumentAccessEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'ACCESS_REVOKED', actorUserId: 'u-admin' }) as never,
+      );
+
+      const restoredResponse = await service.restoreDocument('t1', 'doc1', 'u-admin');
+      expect(restoredResponse.revokedAt).toBeNull();
+      expect(mocks.createDocumentAccessEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'ACCESS_RESTORED', actorUserId: 'u-admin' }) as never,
+      );
+    });
+
+    it('rejects revocation state conflicts (08-D05)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      mocks.findGeneratedDocument.mockResolvedValue({
+        ...activeDocument(),
+        revokedAt: new Date('2026-09-02T00:00:00Z'),
+      });
+      expect(await codeOf(service.revokeDocument('t1', 'doc1', 'u-admin'))).toBe(
+        ContractsErrorCode.DOCUMENT_REVOKE_STATE,
+      );
+
+      mocks.findGeneratedDocument.mockResolvedValue(activeDocument());
+      expect(await codeOf(service.restoreDocument('t1', 'doc1', 'u-admin'))).toBe(
+        ContractsErrorCode.DOCUMENT_REVOKE_STATE,
+      );
+    });
+
+    it('lists the append-only access history (08-D03)', async () => {
+      const mocks = buildMocks();
+      const { service } = wireMocks(mocks);
+      mocks.findGeneratedDocument.mockResolvedValue(activeDocument());
+      mocks.listDocumentAccessEvents.mockResolvedValue([
+        {
+          id: 'e1',
+          action: 'URL_ISSUED',
+          channel: 'CUSTOMER',
+          actorUserId: 'u-cust',
+          createdAt: new Date('2026-09-01T10:00:00Z'),
+        },
+        {
+          id: 'e2',
+          action: 'ACCESS_REVOKED',
+          channel: 'STAFF',
+          actorUserId: 'u-admin',
+          createdAt: new Date('2026-09-01T11:00:00Z'),
+        },
+      ]);
+
+      const history = await service.listDocumentAccessHistory('t1', 'doc1');
+
+      expect(history.documentId).toBe('doc1');
+      expect(history.events.map((event) => event.action)).toEqual(['URL_ISSUED', 'ACCESS_REVOKED']);
+      expect(history.events[0].actorUserId).toBe('u-cust');
+    });
+
+    it('404s for unknown documents and hides foreign tenants', async () => {
       const mocks = buildMocks();
       const { service } = wireMocks(mocks);
       mocks.findGeneratedDocument.mockResolvedValue(null);
-      await expect(service.downloadDocument('t1', 'missing')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.downloadDocument('t1', 'missing', 'u-staff')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.revokeDocument('t1', 'missing', 'u-admin')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.restoreDocument('t1', 'missing', 'u-admin')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.listDocumentAccessHistory('t1', 'missing')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

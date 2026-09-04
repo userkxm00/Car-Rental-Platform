@@ -9,6 +9,7 @@ import type {
   ContractListResponse,
   ContractResponse,
   ContractSignatureInput,
+  DocumentAccessHistoryResponse,
   ReceiptListResponse,
   ReceiptResponse,
 } from '../domain/contracts.contract';
@@ -109,7 +110,7 @@ export class ContractsController {
     return this.service.getReceipt(agencyId, receiptId);
   }
 
-  // ── generated documents ────────────────────────────────────────────────────
+  // ── generated documents (08-C06) + secure lifecycle (08-D) ─────────────────
 
   @Get('documents/:documentId/url')
   @UseGuards(AgencyScopeGuard, PermissionGuard)
@@ -117,7 +118,45 @@ export class ContractsController {
   async downloadDocument(
     @Param('agencyId') agencyId: string,
     @Param('documentId') documentId: string,
+    @AuthUserId() userId: string,
   ): Promise<ContractDownloadResponse> {
-    return this.service.downloadDocument(agencyId, documentId);
+    return this.service.downloadDocument(agencyId, documentId, userId);
+  }
+
+  /** 08-D03: the append-only access trail for one generated document. */
+  @Get('documents/:documentId/access-history')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.CONTRACT_READ)
+  async documentAccessHistory(
+    @Param('agencyId') agencyId: string,
+    @Param('documentId') documentId: string,
+  ): Promise<DocumentAccessHistoryResponse> {
+    return this.service.listDocumentAccessHistory(agencyId, documentId);
+  }
+
+  /** 08-D05: stop further signed-URL issuance; the historical row stays. */
+  @Post('documents/:documentId/revoke')
+  @HttpCode(201)
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.CONTRACT_MANAGE)
+  async revokeDocument(
+    @Param('agencyId') agencyId: string,
+    @Param('documentId') documentId: string,
+    @AuthUserId() userId: string,
+  ): Promise<ContractDownloadResponse> {
+    return this.service.revokeDocument(agencyId, documentId, userId);
+  }
+
+  /** 08-D05: re-enable signed-URL issuance (audited). */
+  @Post('documents/:documentId/restore')
+  @HttpCode(201)
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.CONTRACT_MANAGE)
+  async restoreDocument(
+    @Param('agencyId') agencyId: string,
+    @Param('documentId') documentId: string,
+    @AuthUserId() userId: string,
+  ): Promise<ContractDownloadResponse> {
+    return this.service.restoreDocument(agencyId, documentId, userId);
   }
 }

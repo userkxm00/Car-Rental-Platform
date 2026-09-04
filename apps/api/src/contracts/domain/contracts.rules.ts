@@ -186,6 +186,33 @@ Payments are recorded against the booking ledger.`,
   },
 };
 
+// ---- secure documents (08-D) ------------------------------------------------
+
+/**
+ * Retention policy for generated contract/receipt PDFs (08-D04): the
+ * horizon is fixed at creation and recorded on the document row; there is
+ * no deletion API, so historical documents stay reproducible for the
+ * horizon (docs/06, docs/48).
+ */
+export const DOCUMENT_RETENTION_YEARS_DEFAULT = 10;
+export const DOCUMENT_RETENTION_YEARS_MIN = 1;
+export const DOCUMENT_RETENTION_YEARS_MAX = 30;
+
+export function retentionUntil(createdAt: Date, years: number): Date {
+  const at = new Date(createdAt.getTime());
+  at.setUTCFullYear(at.getUTCFullYear() + years);
+  return at;
+}
+
+/**
+ * Revocation guard (08-D05): a revoked document keeps its historical row
+ * and object, but no further signed-URL issuance is allowed; existing
+ * URLs lapse with their TTL.
+ */
+export function isDocumentAccessible(document: { revokedAt: Date | null }): boolean {
+  return document.revokedAt === null;
+}
+
 // ---- error codes -----------------------------------------------------------
 
 export const ContractsErrorCode = {
@@ -207,6 +234,8 @@ export const ContractsErrorCode = {
   RECEIPT_EXISTS: 'RECEIPT_EXISTS',
   RECEIPT_NOT_FOUND: 'RECEIPT_NOT_FOUND',
   CONTRACT_DOCUMENT_NOT_FOUND: 'CONTRACT_DOCUMENT_NOT_FOUND',
+  DOCUMENT_ACCESS_REVOKED: 'DOCUMENT_ACCESS_REVOKED',
+  DOCUMENT_REVOKE_STATE: 'DOCUMENT_REVOKE_STATE',
 } as const;
 
 export type ContractsErrorCodeValue = (typeof ContractsErrorCode)[keyof typeof ContractsErrorCode];

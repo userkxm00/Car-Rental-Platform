@@ -1,11 +1,13 @@
 import {
   contentHashOf,
   contractNumberOf,
+  isDocumentAccessible,
   isIssuableBookingStatus,
   isValidContentHash,
   parseBookingTotals,
   receiptNumberOf,
   resolveContractLocale,
+  retentionUntil,
 } from './contracts.rules';
 
 describe('contracts.rules (08-C domain)', () => {
@@ -72,6 +74,22 @@ describe('contracts.rules (08-C domain)', () => {
       expect(isValidContentHash(contentHashOf('abc'))).toBe(true);
       expect(isValidContentHash('zz')).toBe(false);
       expect(isValidContentHash(42)).toBe(false);
+    });
+  });
+
+  describe('retention + revocation (08-D04/08-D05)', () => {
+    it('computes the retention horizon from creation (leap-year aware)', () => {
+      const created = new Date('2026-09-04T10:00:00Z');
+      expect(retentionUntil(created, 10).toISOString()).toBe('2036-09-04T10:00:00.000Z');
+      // Leap-day roll-over extends, never shortens, the horizon (2028-02-29 + 1y → 2029-03-01).
+      expect(retentionUntil(new Date('2028-02-29T00:00:00Z'), 1).toISOString()).toBe(
+        '2029-03-01T00:00:00.000Z',
+      );
+    });
+
+    it('treats only active documents as accessible', () => {
+      expect(isDocumentAccessible({ revokedAt: null })).toBe(true);
+      expect(isDocumentAccessible({ revokedAt: new Date() })).toBe(false);
     });
   });
 });

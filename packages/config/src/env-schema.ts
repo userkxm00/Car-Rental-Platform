@@ -88,6 +88,10 @@ const envSchemaFields = {
   MAP_PROVIDER: z.enum(MAP_PROVIDER_VALUES).default('maptiler'),
 
   // ── Object storage — Cloudflare R2 (S3-compatible) ─────────────────────
+  /** Signed-download URL lifetime for generated contract/receipt PDFs (08-D02). */
+  GENERATED_DOCUMENT_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+  /** Retention horizon for generated contract/receipt documents (08-D04). */
+  DOCUMENT_RETENTION_YEARS: z.coerce.number().int().min(1).max(30).default(10),
   R2_ACCOUNT_ID: z.string().min(1).optional(),
   R2_ACCESS_KEY_ID: z.string().min(1).optional(),
   R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),

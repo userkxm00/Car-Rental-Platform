@@ -60,6 +60,29 @@ describe('loadEnvSchema', () => {
     );
   });
 
+  it('validates the generated-document security knobs (08-D02/08-D04)', () => {
+    const env = loadEnvSchema({
+      DATABASE_URL: VALID_DB_URL,
+      GENERATED_DOCUMENT_URL_TTL_SECONDS: '600',
+      DOCUMENT_RETENTION_YEARS: '7',
+    });
+    expect(env.GENERATED_DOCUMENT_URL_TTL_SECONDS).toBe(600);
+    expect(env.DOCUMENT_RETENTION_YEARS).toBe(7);
+
+    expect(() =>
+      loadEnvSchema({ DATABASE_URL: VALID_DB_URL, GENERATED_DOCUMENT_URL_TTL_SECONDS: '59' }),
+    ).toThrow(EnvValidationError);
+    expect(() =>
+      loadEnvSchema({ DATABASE_URL: VALID_DB_URL, GENERATED_DOCUMENT_URL_TTL_SECONDS: '3601' }),
+    ).toThrow(EnvValidationError);
+    expect(() =>
+      loadEnvSchema({ DATABASE_URL: VALID_DB_URL, DOCUMENT_RETENTION_YEARS: '0' }),
+    ).toThrow(EnvValidationError);
+    expect(() =>
+      loadEnvSchema({ DATABASE_URL: VALID_DB_URL, DOCUMENT_RETENTION_YEARS: '31' }),
+    ).toThrow(EnvValidationError);
+  });
+
   it('validates DEFAULT_CURRENCY as a 3-letter code', () => {
     expect(() => loadEnvSchema({ DATABASE_URL: VALID_DB_URL, DEFAULT_CURRENCY: 'dzd' })).toThrow(
       EnvValidationError,

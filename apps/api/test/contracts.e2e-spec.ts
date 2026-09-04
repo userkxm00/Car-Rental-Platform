@@ -42,7 +42,14 @@ interface ContractBody {
     title: string;
   } | null;
   signature: { method: string; signerRole: string; signerName: string; contentHash: string } | null;
-  document: { id: string; title: string; contentType: string; sizeBytes: number } | null;
+  document: {
+    id: string;
+    title: string;
+    contentType: string;
+    sizeBytes: number;
+    retainUntil: string | null;
+    revokedAt: string | null;
+  } | null;
 }
 
 interface ReceiptBody {
@@ -53,8 +60,15 @@ interface ReceiptBody {
 }
 
 interface DownloadBody {
-  url: string;
-  expiresAt: string;
+  url: string | null;
+  expiresAt: string | null;
+  retainUntil: string | null;
+  revokedAt: string | null;
+}
+
+interface AccessHistoryBody {
+  documentId: string;
+  events: Array<{ action: string; channel: string; actorUserId: string | null; createdAt: string }>;
 }
 
 describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
@@ -69,6 +83,7 @@ describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
   let customerUserId: string;
   let bookingId: string;
   let bookingNumber: string;
+  let receiptDocumentId: string;
   let vehicleId: string;
   let pickupBranchId: string;
   let returnBranchId: string;
@@ -341,6 +356,7 @@ describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
     expect(body.receiptNumber).toContain('RT-');
     expect(body.totals).toEqual({ currency: 'DZD', totalMinor: 45000, depositMinor: 10000 });
     expect(body.document).not.toBeNull();
+    receiptDocumentId = body.document!.id;
 
     const download = await getAs(
       bearer,
@@ -348,7 +364,8 @@ describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
     ).expect(200);
     const downloadBody = download.body as DownloadBody;
     expect(downloadBody.url).toContain('https://');
-    expect(new Date(downloadBody.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(downloadBody.expiresAt).not.toBeNull();
+    expect(new Date(downloadBody.expiresAt as string).getTime()).toBeGreaterThan(Date.now());
 
     const dup = await errorOf(postAs(bearer, `/api/v1/agencies/${agencyId}/bookings/${bookingId}/receipts`));
     expect(dup.status).toBe(409);
@@ -375,6 +392,96 @@ describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
     expect((download.body as DownloadBody).url).toContain('https://');
   });
 
+  it('secures generated documents: retention, revocation, restore and the access trail (08-D)', async () => {
+    const bearer = await agencyToken('ctr-owner', agencyId);
+    const customerBearer = await token('ctr-customer');
+
+    // 08-D04: the generated PDF records its retention horizon at creation.
+    const receipt = await getAs(bearer, `/api/v1/agencies/${agencyId}/receipts`).expect(200);
+    const receiptList = receipt.body as { items: ReceiptBody[] };
+    const receiptWithDocument = receiptList.items.find((item) => item.document?.id === receiptDocumentId);
+    expect(receiptWithDocument).toBeDefined();
+
+    // 08-D05: staff revocation stops further URL issuance everywhere.
+    const revoked = await postAs(
+      bearer,
+      `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/revoke`,
+    ).expect(201);
+    const revokedBody = revoked.body as DownloadBody;
+    expect(revokedBody.url).toBeNull();
+    expect(revokedBody.expiresAt).toBeNull();
+    expect(revokedBody.revokedAt).not.toBeNull();
+    expect(revokedBody.retainUntil).not.toBeNull();
+
+    const staffDenied = await errorOf(
+      getAs(bearer, `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/url`),
+    );
+    expect(staffDenied.status).toBe(409);
+    expect(staffDenied.code).toBe('DOCUMENT_ACCESS_REVOKED');
+
+    const customerDenied = await errorOf(
+      getAs(customerBearer, `/api/v1/me/documents/${receiptDocumentId}/url`),
+    );
+    expect(customerDenied.status).toBe(409);
+    expect(customerDenied.code).toBe('DOCUMENT_ACCESS_REVOKED');
+
+    const duplicateRevoke = await errorOf(
+      postAs(bearer, `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/revoke`),
+    );
+    expect(duplicateRevoke.status).toBe(409);
+    expect(duplicateRevoke.code).toBe('DOCUMENT_REVOKE_STATE');
+
+    // 08-D05: restore re-enables issuance; downloads work again.
+    const restored = await postAs(
+      bearer,
+      `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/restore`,
+    ).expect(201);
+    expect((restored.body as DownloadBody).revokedAt).toBeNull();
+    await getAs(bearer, `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/url`).expect(200);
+
+    // 08-D03: the append-only access trail records every grant and
+    // revocation with the acting user and channel.
+    const history = await getAs(
+      bearer,
+      `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/access-history`,
+    ).expect(200);
+    const historyBody = history.body as AccessHistoryBody;
+    expect(historyBody.documentId).toBe(receiptDocumentId);
+    expect(historyBody.events.map((event) => event.action)).toContain('URL_ISSUED');
+    expect(historyBody.events.map((event) => event.action)).toContain('ACCESS_REVOKED');
+    expect(historyBody.events.map((event) => event.action)).toContain('ACCESS_RESTORED');
+    const channels = historyBody.events.filter((event) => event.action === 'URL_ISSUED').map((event) => event.channel);
+    expect(channels).toContain('STAFF');
+    expect(channels).toContain('CUSTOMER');
+
+    // Cross-tenant: a foreign agency cannot revoke or read the trail.
+    const otherBearer = await agencyToken('ctr-other-owner', otherAgencyId);
+    const foreignRevoke = await errorOf(
+      postAs(otherBearer, `/api/v1/agencies/${otherAgencyId}/documents/${receiptDocumentId}/revoke`),
+    );
+    expect(foreignRevoke.status).toBe(404);
+    expect(foreignRevoke.code).toBe('CONTRACT_DOCUMENT_NOT_FOUND');
+
+    // Permission boundary: contract.read users cannot revoke documents.
+    const staffUserId = await appUserId('ctr-staff');
+    const staffExisting = (await memberships.listForTenant(agencyId)).find(
+      (membership) => membership.userId === staffUserId,
+    );
+    if (!staffExisting) {
+      await memberships.invite(agencyId, staffUserId, ['STAFF_AGENT']);
+    }
+    const staffMembership = (await memberships.listForTenant(agencyId)).find(
+      (membership) => membership.userId === staffUserId,
+    );
+    expect(staffMembership).toBeDefined();
+    await memberships.accept(staffUserId, staffMembership!.id);
+    const staffBearer = await token('ctr-staff');
+    const staffRevoke = await errorOf(
+      postAs(staffBearer, `/api/v1/agencies/${agencyId}/documents/${receiptDocumentId}/revoke`),
+    );
+    expect(staffRevoke.status).toBe(403);
+  });
+
   it('denies other users access to the customer documents', async () => {
     const bearer = await token('ctr-intruder');
     await appUserId('ctr-intruder');
@@ -398,10 +505,13 @@ describe('Rental contracts, signatures, receipts (08-C, integration)', () => {
     // A member without contract permissions cannot issue contracts.
     const staffSubject = 'ctr-staff';
     const staffUserId = await appUserId(staffSubject);
-    await memberships.invite(agencyId, staffUserId, ['STAFF_AGENT']);
     const membership = (await memberships.listForTenant(agencyId)).find((m) => m.userId === staffUserId);
-    if (membership) {
-      await memberships.accept(staffUserId, membership.id);
+    if (!membership) {
+      await memberships.invite(agencyId, staffUserId, ['STAFF_AGENT']);
+    }
+    const acceptedMembership = (await memberships.listForTenant(agencyId)).find((m) => m.userId === staffUserId);
+    if (acceptedMembership) {
+      await memberships.accept(staffUserId, acceptedMembership.id);
     }
     const bearer = await token(staffSubject);
 

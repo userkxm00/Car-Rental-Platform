@@ -222,6 +222,65 @@ async function main() {
   const meContract = await http('GET', `/me/contracts/${contractId}`, { token: customerToken });
   assert(meContract.status === 200, `me contract detail (${meContract.status})`);
 
+  // ---- 08-D04: generated documents record their retention horizon
+  assert(
+    typeof issued.body.document?.retainUntil === 'string' &&
+      new Date(issued.body.document.retainUntil).getTime() > Date.now(),
+    'contract PDF records a future retention horizon',
+  );
+
+  // ---- 08-D05: revocation stops URL issuance on every surface
+  const revoked = await http('POST', `${base}/documents/${receipt.body.document.id}/revoke`, {
+    token: agencyToken,
+  });
+  assert(revoked.status === 201 && revoked.body.url === null && revoked.body.revokedAt !== null, `revoke 201, url null (${revoked.status})`);
+  const staffDenied = await http('GET', `${base}/documents/${receipt.body.document.id}/url`, { token: agencyToken });
+  assert(staffDenied.status === 409 && staffDenied.body?.error?.code === 'DOCUMENT_ACCESS_REVOKED', `staff download refused after revoke (${staffDenied.status})`);
+  const customerDenied = await http('GET', `/me/documents/${receipt.body.document.id}/url`, { token: customerToken });
+  assert(customerDenied.status === 409 && customerDenied.body?.error?.code === 'DOCUMENT_ACCESS_REVOKED', `customer download refused after revoke (${customerDenied.status})`);
+  const dupRevoke = await http('POST', `${base}/documents/${receipt.body.document.id}/revoke`, { token: agencyToken });
+  assert(dupRevoke.status === 409 && dupRevoke.body?.error?.code === 'DOCUMENT_REVOKE_STATE', `duplicate revoke 409 (${dupRevoke.status})`);
+
+  // ---- 08-D05: restore re-enables issuance
+  const restored = await http('POST', `${base}/documents/${receipt.body.document.id}/restore`, { token: agencyToken });
+  assert(restored.status === 201 && restored.body.revokedAt === null, `restore 201 revokedAt null (${restored.status})`);
+  const again = await http('GET', `${base}/documents/${receipt.body.document.id}/url`, { token: agencyToken });
+  assert(again.status === 200 && again.body.url.startsWith('http'), `download works after restore (${again.status})`);
+
+  // ---- 08-D03: the append-only access trail
+  const history = await http('GET', `${base}/documents/${receipt.body.document.id}/access-history`, { token: agencyToken });
+  assert(history.status === 200 && history.body.documentId === receipt.body.document.id, `access history 200 (${history.status})`);
+  const actions = history.body.events.map((event) => event.action);
+  assert(
+    actions.includes('URL_ISSUED') && actions.includes('ACCESS_REVOKED') && actions.includes('ACCESS_RESTORED'),
+    `trail carries URL_ISSUED + ACCESS_REVOKED + ACCESS_RESTORED (${actions.join(',')})`,
+  );
+  const issuedChannels = history.body.events
+    .filter((event) => event.action === 'URL_ISSUED')
+    .map((event) => event.channel);
+  assert(issuedChannels.includes('STAFF') && issuedChannels.includes('CUSTOMER'), `trail records STAFF and CUSTOMER issuance channels (${issuedChannels.join(',')})`);
+
+  // ---- cross-tenant revocation is refused
+  // Routed through the other tenant's own owner membership (the caller's
+  // agency path would 403 at the scope guard before any lookup).
+  const foreignRevoke = await http('POST', `/agencies/${tenantB}/documents/${receipt.body.document.id}/revoke`, {
+    token: customerToken,
+  });
+  assert(foreignRevoke.status === 404 && foreignRevoke.body?.error?.code === 'CONTRACT_DOCUMENT_NOT_FOUND', `cross-tenant revoke 404 (${foreignRevoke.status})`);
+
+  // ---- permission boundary: STAFF_AGENT has contract.read but not contract.manage
+  const staffMembership = (
+    await pg.query(
+      `INSERT INTO memberships (id, "tenantId", "userId", status, "updatedAt") VALUES (gen_random_uuid(), $1, $2, 'ACTIVE', now()) RETURNING id`,
+      [tenantA, customerUser],
+    )
+  ).rows[0].id;
+  await pg.query(`INSERT INTO membership_roles (id, "membershipId", role) VALUES (gen_random_uuid(), $1, 'STAFF_AGENT')`, [
+    staffMembership,
+  ]);
+  const staffRevoke = await http('POST', `${base}/documents/${receipt.body.document.id}/revoke`, { token: customerToken });
+  assert(staffRevoke.status === 403, `STAFF_AGENT revoke forbidden (${staffRevoke.status})`);
+
   // ---- isolation
   const unauth = await http('GET', `${base}/contracts/${contractId}`);
   assert(unauth.status === 401, `unauthenticated 401 (${unauth.status})`);
