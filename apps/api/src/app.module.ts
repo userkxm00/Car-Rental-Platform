@@ -20,6 +20,7 @@ import { MePortalModule } from './portal/me-portal.module';
 import { DocumentsModule } from './documents/documents.module';
 import { TemplatesModule } from './templates/templates.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { PaymentsModule } from './payments/payments.module';
 
 /**
  * Root application module.
@@ -50,6 +51,7 @@ import { ContractsModule } from './contracts/contracts.module';
     DocumentsModule,
     TemplatesModule,
     ContractsModule,
+    PaymentsModule,
     HealthModule,
   ],
 })

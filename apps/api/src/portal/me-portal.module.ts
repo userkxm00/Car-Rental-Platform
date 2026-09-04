@@ -7,6 +7,7 @@ import { CustomersModule } from '../customers/customers.module';
 import { MarketplaceModule } from '../marketplace/marketplace.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { ContractsModule } from '../contracts/contracts.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { MePortalService } from './application/me-portal.service';
 import { MePortalController } from './presentation/me-portal.controller';
 
@@ -27,6 +28,7 @@ import { MePortalController } from './presentation/me-portal.controller';
     CustomersModule,
     DocumentsModule,
     ContractsModule,
+    PaymentsModule,
   ],
   controllers: [MePortalController],
   providers: [MePortalService],

@@ -12,6 +12,20 @@ export {
   TemplateVersionInput,
 } from './endpoints/templates';
 export {
+  createMePaymentsApi,
+  createPaymentsApi,
+  DepositHoldResponseDto,
+  DepositHoldStatusDto,
+  MePaymentsApi,
+  PaymentIntentStatusDto,
+  PaymentMethodDto,
+  PaymentRecordInputDto,
+  PaymentRecordResponseDto,
+  PaymentRecordStatusDto,
+  PaymentsApi,
+  PaymentSummaryResponseDto,
+} from './endpoints/payments';
+export {
   ContractDocumentDto,
   ContractDownloadResponseDto,
   ContractListResponseDto,

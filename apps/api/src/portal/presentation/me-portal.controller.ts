@@ -196,4 +196,13 @@ export class MePortalController {
     const userId = await this.identityResolution.resolve(principal);
     return this.service.downloadDocument(userId, documentId);
   }
+
+  @Get('bookings/:bookingId/payments')
+  async bookingPayments(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingPayments']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingPayments(userId, bookingId);
+  }
 }

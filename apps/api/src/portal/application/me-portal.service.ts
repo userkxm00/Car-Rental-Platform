@@ -11,6 +11,8 @@ import type { CustomerResponse } from '../../customers/domain/customer-contract'
 import { DocumentsService } from '../../documents/application/documents.service';
 import type { DocumentChecklistResponse } from '../../documents/domain/documents.contract';
 import { ContractsService } from '../../contracts/application/contracts.service';
+import { PaymentsService } from '../../payments/application/payments.service';
+import type { PaymentSummaryResponse } from '../../payments/domain/payment-contract';
 import type {
   ContractDownloadResponse,
   ContractListResponse,
@@ -43,6 +45,7 @@ export class MePortalService {
     private readonly customers: CustomerSelfService,
     private readonly documents: DocumentsService,
     private readonly contracts: ContractsService,
+    private readonly payments: PaymentsService,
   ) {}
 
   /** 07-E04: request a quote against a public agency slug (MARKETPLACE channel). */
@@ -163,5 +166,12 @@ export class MePortalService {
 
   async downloadDocument(userId: string, documentId: string): Promise<ContractDownloadResponse> {
     return this.contracts.downloadDocumentForUser(userId, documentId);
+  }
+
+  // ── 09-A: own booking payment state ─────────────────────────────────────
+
+  async bookingPayments(userId: string, bookingId: string): Promise<PaymentSummaryResponse> {
+    await this.bookings.getBookingForUser(userId, bookingId);
+    return this.payments.getBookingPaymentsForUser(userId, bookingId);
   }
 }
