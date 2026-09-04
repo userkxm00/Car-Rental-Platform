@@ -21,6 +21,18 @@ export abstract class ObjectStorage {
     contentType: string;
   }): Promise<UploadedObject>;
 
+  /**
+   * Store a generated contract/receipt PDF (08-C04) under a generated
+   * private key. Same private-object policy as media uploads (03-C03):
+   * downloads flow exclusively through short-lived signed URLs.
+   */
+  abstract uploadDocument(input: {
+    tenantId: string;
+    kind: 'contract' | 'receipt';
+    data: Buffer;
+    contentType: string;
+  }): Promise<UploadedObject>;
+
   /** Short-lived signed download URL (03-C08). */
   abstract createSignedDownloadUrl(objectKey: string, expiresInSeconds: number): Promise<string>;
 

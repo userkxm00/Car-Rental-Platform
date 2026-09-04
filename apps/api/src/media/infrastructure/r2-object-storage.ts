@@ -58,6 +58,24 @@ export class R2ObjectStorage extends ObjectStorage {
     return { objectKey };
   }
 
+  override async uploadDocument(input: {
+    tenantId: string;
+    kind: 'contract' | 'receipt';
+    data: Buffer;
+    contentType: string;
+  }): Promise<UploadedObject> {
+    const objectKey = `${UPLOAD_PREFIX}/${input.tenantId}/${input.kind}s/${randomUUID()}.pdf`;
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey,
+        Body: input.data,
+        ContentType: input.contentType,
+      }),
+    );
+    return { objectKey };
+  }
+
   override async createSignedDownloadUrl(
     objectKey: string,
     expiresInSeconds: number,

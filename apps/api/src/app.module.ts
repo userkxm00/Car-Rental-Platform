@@ -19,6 +19,7 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
 import { MePortalModule } from './portal/me-portal.module';
 import { DocumentsModule } from './documents/documents.module';
 import { TemplatesModule } from './templates/templates.module';
+import { ContractsModule } from './contracts/contracts.module';
 
 /**
  * Root application module.
@@ -48,6 +49,7 @@ import { TemplatesModule } from './templates/templates.module';
     MePortalModule,
     DocumentsModule,
     TemplatesModule,
+    ContractsModule,
     HealthModule,
   ],
 })

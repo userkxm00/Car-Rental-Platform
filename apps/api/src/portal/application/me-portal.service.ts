@@ -10,6 +10,15 @@ import { CustomerSelfService } from '../../customers/application/customer-self.s
 import type { CustomerResponse } from '../../customers/domain/customer-contract';
 import { DocumentsService } from '../../documents/application/documents.service';
 import type { DocumentChecklistResponse } from '../../documents/domain/documents.contract';
+import { ContractsService } from '../../contracts/application/contracts.service';
+import type {
+  ContractDownloadResponse,
+  ContractListResponse,
+  ContractResponse,
+  ContractSignatureInput,
+  ReceiptListResponse,
+  ReceiptResponse,
+} from '../../contracts/domain/contracts.contract';
 
 /**
  * PHASE-07 / 07-E customer booking portal (me-surface use-cases).
@@ -33,6 +42,7 @@ export class MePortalService {
     private readonly bookings: BookingsService,
     private readonly customers: CustomerSelfService,
     private readonly documents: DocumentsService,
+    private readonly contracts: ContractsService,
   ) {}
 
   /** 07-E04: request a quote against a public agency slug (MARKETPLACE channel). */
@@ -121,5 +131,37 @@ export class MePortalService {
   async bookingChecklist(userId: string, bookingId: string): Promise<DocumentChecklistResponse> {
     const booking = await this.bookings.getBookingForUser(userId, bookingId);
     return this.documents.checklistForBooking(booking.tenantId, bookingId);
+  }
+
+  // ── 08-C: own contracts, receipts and downloads ──────────────────────────
+
+  async bookingContracts(userId: string, bookingId: string): Promise<ContractListResponse> {
+    await this.bookings.getBookingForUser(userId, bookingId);
+    return this.contracts.listContractsForUser(userId, bookingId);
+  }
+
+  async getContract(userId: string, contractId: string): Promise<ContractResponse> {
+    return this.contracts.getContractForUser(userId, contractId);
+  }
+
+  async signContract(
+    userId: string,
+    contractId: string,
+    input: ContractSignatureInput,
+  ): Promise<ContractResponse> {
+    return this.contracts.signContractForUser(userId, contractId, input);
+  }
+
+  async bookingReceipts(userId: string, bookingId: string): Promise<ReceiptListResponse> {
+    await this.bookings.getBookingForUser(userId, bookingId);
+    return this.contracts.receiptForUserBooking(userId, bookingId);
+  }
+
+  async getReceipt(userId: string, receiptId: string): Promise<ReceiptResponse> {
+    return this.contracts.getReceiptForUser(userId, receiptId);
+  }
+
+  async downloadDocument(userId: string, documentId: string): Promise<ContractDownloadResponse> {
+    return this.contracts.downloadDocumentForUser(userId, documentId);
   }
 }

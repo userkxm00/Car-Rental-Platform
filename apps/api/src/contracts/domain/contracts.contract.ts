@@ -51,7 +51,7 @@ export interface ContractResponse {
   status: 'ISSUED' | 'SIGNED' | 'CANCELLED';
   locale: string;
   issuedAt: string;
-  snapshot: ContractSnapshotResponse;
+  snapshot: ContractSnapshotResponse | null;
   signature: ContractSignatureResponse | null;
   document: ContractDocumentResponse | null;
 }

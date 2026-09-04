@@ -28,6 +28,18 @@ export class LocalTempObjectStorage extends ObjectStorage {
     return Promise.resolve({ objectKey });
   }
 
+  override uploadDocument(input: {
+    tenantId: string;
+    kind: 'contract' | 'receipt';
+    data: Buffer;
+    contentType: string;
+  }): Promise<UploadedObject> {
+    const objectKey = `private/${input.tenantId}/${input.kind}s/${randomUUID()}.pdf`;
+    this.objects.set(objectKey, input.data);
+    this.signed.set(objectKey, `https://local.test/objects/${objectKey}`);
+    return Promise.resolve({ objectKey });
+  }
+
   override createSignedDownloadUrl(objectKey: string, _expiresInSeconds: number): Promise<string> {
     const url = this.signed.get(objectKey);
     if (!url) {

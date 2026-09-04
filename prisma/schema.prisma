@@ -1240,6 +1240,7 @@ model ContractSnapshot {
   variablesJson   Json
   contentText     String
   contentHash     String
+  title           String            @default("")
   createdAt       DateTime          @default(now())
   contract        RentalContract    @relation(fields: [contractId], references: [id], onDelete: Cascade)
   template        DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)

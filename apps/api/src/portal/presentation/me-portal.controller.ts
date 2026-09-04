@@ -7,6 +7,7 @@ import type { QuoteRequestInput } from '../../quotes/domain/quote-contract';
 import type { CustomerResponse } from '../../customers/domain/customer-contract';
 import type { BookingResponse } from '../../bookings/application/bookings.service';
 import { MePortalService } from '../application/me-portal.service';
+import type { ContractSignatureInput } from '../../contracts/domain/contracts.contract';
 
 /**
  * PHASE-07 / 07-E customer booking portal (me-surface).
@@ -136,5 +137,63 @@ export class MePortalController {
   ): Promise<BookingResponse> {
     const userId = await this.identityResolution.resolve(principal);
     return this.service.cancelBooking(userId, bookingId, body?.reason ?? '');
+  }
+
+  // ── 08-C: own contracts, receipts and generated documents ────────────────
+
+  @Get('bookings/:bookingId/contracts')
+  async bookingContracts(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingContracts']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingContracts(userId, bookingId);
+  }
+
+  @Get('contracts/:contractId')
+  async getContract(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('contractId') contractId: string,
+  ): Promise<ReturnType<MePortalService['getContract']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.getContract(userId, contractId);
+  }
+
+  @Post('contracts/:contractId/signature')
+  @HttpCode(201)
+  async signContract(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('contractId') contractId: string,
+    @Body() body: ContractSignatureInput,
+  ): Promise<ReturnType<MePortalService['signContract']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.signContract(userId, contractId, body ?? {});
+  }
+
+  @Get('bookings/:bookingId/receipts')
+  async bookingReceipts(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingReceipts']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingReceipts(userId, bookingId);
+  }
+
+  @Get('receipts/:receiptId')
+  async getReceipt(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('receiptId') receiptId: string,
+  ): Promise<ReturnType<MePortalService['getReceipt']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.getReceipt(userId, receiptId);
+  }
+
+  @Get('documents/:documentId/url')
+  async downloadDocument(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('documentId') documentId: string,
+  ): Promise<ReturnType<MePortalService['downloadDocument']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.downloadDocument(userId, documentId);
   }
 }

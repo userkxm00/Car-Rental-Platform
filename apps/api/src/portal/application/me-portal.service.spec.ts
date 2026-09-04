@@ -7,6 +7,7 @@ import type { BookingsService } from '../../bookings/application/bookings.servic
 import type { BookingResponse } from '../../bookings/application/bookings.service';
 import type { CustomerSelfService } from '../../customers/application/customer-self.service';
 import type { DocumentsService } from '../../documents/application/documents.service';
+import type { ContractsService } from '../../contracts/application/contracts.service';
 
 const profileResponse = () => ({
   agency: {
@@ -127,7 +128,8 @@ function makeService(options: {
   const documents = {
     checklistForBooking: documentsChecklist,
   } as unknown as DocumentsService;
-  const service = new MePortalService(profiles, quotes, bookings, customers, documents);
+  const contracts = {} as ContractsService;
+  const service = new MePortalService(profiles, quotes, bookings, customers, documents, contracts);
   return {
     service,
     documents,
