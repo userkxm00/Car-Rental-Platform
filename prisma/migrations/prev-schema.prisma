@@ -60,6 +60,9 @@ model User {
   recordedPayments PaymentRecord[]     @relation("PaymentRecorder")
   confirmedPayments PaymentRecord[]    @relation("PaymentConfirmer")
   releasedDeposits DepositHold[]       @relation("DepositReleaser")
+  ledgerTransactions LedgerTransaction[] @relation("LedgerActor")
+  issuedInvoices   Invoice[]           @relation("InvoiceIssuer")
+  voidedInvoices   Invoice[]           @relation("InvoiceVoider")
 
   @@map("users")
 }
@@ -134,6 +137,8 @@ model Tenant {
   paymentIntents    PaymentIntent[]
   paymentRecords    PaymentRecord[]
   depositHolds      DepositHold[]
+  ledgerTransactions LedgerTransaction[]
+  invoices          Invoice[]
   generatedDocuments GeneratedDocument[]
 
   @@map("tenants")
@@ -574,6 +579,8 @@ model Booking {
   receipt             Receipt?
   paymentIntent       PaymentIntent?
   depositHold         DepositHold?
+  ledgerTransactions  LedgerTransaction[]
+  invoices            Invoice[]
   generatedDocuments  GeneratedDocument[]            @relation("BookingGeneratedDocument")
 
   @@unique([tenantId, bookingNumber])
@@ -1116,6 +1123,84 @@ model DepositHold {
   releasedBy   User?             @relation("DepositReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
 
   @@map("deposit_holds")
+}
+
+/// 09-B06: the immutable financial event log. Rows are append-only —
+/// nothing updates or deletes them; corrections arrive as later rows
+/// (refunds/adjustments, 09-C). Monetary movements carry the integer
+/// minor amount; state markers (voids, invoice lifecycle) carry zero.
+enum LedgerTransactionKind {
+  PAYMENT_CONFIRMED
+  PAYMENT_VOIDED
+  DEPOSIT_HELD
+  DEPOSIT_RELEASED
+  INVOICE_ISSUED
+  INVOICE_VOIDED
+}
+
+model LedgerTransaction {
+  id          String                @id @default(uuid()) @db.Uuid
+  tenantId    String                @db.Uuid
+  bookingId   String                @db.Uuid
+  kind        LedgerTransactionKind
+  currency    String
+  amountMinor Int                   @default(0)
+  sourceType  String
+  sourceId    String?               @db.Uuid
+  actorUserId String?               @db.Uuid
+  description String?
+  createdAt   DateTime              @default(now())
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking     Booking               @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actor       User?                 @relation("LedgerActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("ledger_transactions")
+}
+
+/// 09-B02/09-B03: the settlement invoice. Items are assembled
+/// server-side from the immutable booking snapshot; voiding keeps the
+/// historical row (no destructive rewrites — a corrected settlement
+/// means void + a new numbered invoice).
+enum InvoiceStatus {
+  ISSUED
+  VOIDED
+}
+
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  tenantId      String        @db.Uuid
+  bookingId     String        @db.Uuid
+  invoiceNumber String
+  status        InvoiceStatus @default(ISSUED)
+  currency      String
+  totalMinor    Int
+  issuedById    String?       @db.Uuid
+  voidedById    String?       @db.Uuid
+  voidedAt      DateTime?
+  createdAt     DateTime      @default(now())
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  issuedBy      User?         @relation("InvoiceIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  voidedBy      User?         @relation("InvoiceVoider", fields: [voidedById], references: [id], onDelete: SetNull)
+  items         InvoiceItem[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([bookingId, createdAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  invoiceId   String   @db.Uuid
+  kind        String
+  description String
+  amountMinor Int
+  createdAt   DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("invoice_items")
 }
 
 enum VehicleStatus {
