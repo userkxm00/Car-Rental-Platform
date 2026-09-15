@@ -13,6 +13,8 @@ import type { DocumentChecklistResponse } from '../../documents/domain/documents
 import { ContractsService } from '../../contracts/application/contracts.service';
 import { PaymentsService } from '../../payments/application/payments.service';
 import type { PaymentSummaryResponse } from '../../payments/domain/payment-contract';
+import { BillingService } from '../../billing/application/billing.service';
+import type { InvoiceResponse, LedgerEntryResponse } from '../../billing/application/billing.service';
 import type {
   ContractDownloadResponse,
   ContractListResponse,
@@ -46,6 +48,7 @@ export class MePortalService {
     private readonly documents: DocumentsService,
     private readonly contracts: ContractsService,
     private readonly payments: PaymentsService,
+    private readonly billing: BillingService,
   ) {}
 
   /** 07-E04: request a quote against a public agency slug (MARKETPLACE channel). */
@@ -173,5 +176,17 @@ export class MePortalService {
   async bookingPayments(userId: string, bookingId: string): Promise<PaymentSummaryResponse> {
     await this.bookings.getBookingForUser(userId, bookingId);
     return this.payments.getBookingPaymentsForUser(userId, bookingId);
+  }
+
+  // ── 09-B: own booking ledger and invoices ────────────────────────────────
+
+  async bookingLedger(userId: string, bookingId: string): Promise<LedgerEntryResponse[]> {
+    await this.bookings.getBookingForUser(userId, bookingId);
+    return this.billing.getBookingLedgerForCustomer(userId, bookingId);
+  }
+
+  async bookingInvoices(userId: string, bookingId: string): Promise<InvoiceResponse[]> {
+    await this.bookings.getBookingForUser(userId, bookingId);
+    return this.billing.getBookingInvoicesForCustomer(userId, bookingId);
   }
 }

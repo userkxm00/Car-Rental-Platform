@@ -42,6 +42,7 @@ export const Permission = {
   PAYMENT_REFUND: 'payment.refund',
   PRICING_READ: 'pricing.read',
   PRICING_MANAGE: 'pricing.manage',
+  BILLING_READ: 'billing.read',
   BILLING_MANAGE: 'billing.manage',
 
   // Contracts & documents (PHASE-08)
@@ -84,6 +85,7 @@ export const PERMISSION_DOC: Record<PermissionValue, string> = {
   [Permission.PAYMENT_REFUND]: 'Refund payments.',
   [Permission.PRICING_READ]: 'Read pricing.',
   [Permission.PRICING_MANAGE]: 'Manage pricing.',
+  [Permission.BILLING_READ]: 'Read the booking financial ledger and invoices.',
   [Permission.BILLING_MANAGE]: 'Manage billing.',
   [Permission.CONTRACT_READ]: 'Read contract templates, contracts and receipts.',
   [Permission.CONTRACT_MANAGE]: 'Manage contract templates and generate contracts.',

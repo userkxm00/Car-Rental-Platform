@@ -9,6 +9,7 @@ import type { CustomerSelfService } from '../../customers/application/customer-s
 import type { DocumentsService } from '../../documents/application/documents.service';
 import type { ContractsService } from '../../contracts/application/contracts.service';
 import type { PaymentsService } from '../../payments/application/payments.service';
+import type { BillingService } from '../../billing/application/billing.service';
 
 const profileResponse = () => ({
   agency: {
@@ -131,7 +132,8 @@ function makeService(options: {
   } as unknown as DocumentsService;
   const contracts = {} as ContractsService;
   const payments = {} as PaymentsService;
-  const service = new MePortalService(profiles, quotes, bookings, customers, documents, contracts, payments);
+  const billing = {} as BillingService;
+  const service = new MePortalService(profiles, quotes, bookings, customers, documents, contracts, payments, billing);
   return {
     service,
     documents,

@@ -21,6 +21,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { TemplatesModule } from './templates/templates.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { PaymentsModule } from './payments/payments.module';
+import { BillingModule } from './billing/billing.module';
 
 /**
  * Root application module.
@@ -52,6 +53,7 @@ import { PaymentsModule } from './payments/payments.module';
     TemplatesModule,
     ContractsModule,
     PaymentsModule,
+    BillingModule,
     HealthModule,
   ],
 })

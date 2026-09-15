@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthorizationModule } from '../authorization/authorization.module';
+import { BillingModule } from '../billing/billing.module';
 import { IdentityModule } from '../identity/identity.module';
 import { SecurityModule } from '../security/security.module';
 import { PaymentsService } from './application/payments.service';
@@ -13,7 +14,7 @@ import { PaymentsController } from './presentation/payments.controller';
  * booking price snapshot; nothing in this module deletes money.
  */
 @Module({
-  imports: [IdentityModule, AuthorizationModule, SecurityModule],
+  imports: [IdentityModule, AuthorizationModule, SecurityModule, BillingModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsRepository],
   exports: [PaymentsService],

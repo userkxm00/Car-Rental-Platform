@@ -26,6 +26,16 @@ export {
   PaymentSummaryResponseDto,
 } from './endpoints/payments';
 export {
+  BillingApi,
+  createBillingApi,
+  createMeBillingApi,
+  InvoiceItemResponseDto,
+  InvoiceResponseDto,
+  InvoiceStatusDto,
+  LedgerEntryResponseDto,
+  MeBillingApi,
+} from './endpoints/billing';
+export {
   ContractDocumentDto,
   ContractDownloadResponseDto,
   ContractListResponseDto,

@@ -47,6 +47,7 @@ export const ROLE_PERMISSIONS: Record<RoleValue, readonly PermissionValue[]> = {
     Permission.PAYMENT_REFUND,
     Permission.PRICING_READ,
     Permission.PRICING_MANAGE,
+    Permission.BILLING_READ,
     Permission.BILLING_MANAGE,
     Permission.CONTRACT_READ,
     Permission.CONTRACT_MANAGE,
@@ -80,6 +81,7 @@ export const ROLE_PERMISSIONS: Record<RoleValue, readonly PermissionValue[]> = {
     Permission.CUSTOMER_DOCUMENT_VERIFY,
     Permission.CONTRACT_READ,
     Permission.CONTRACT_MANAGE,
+    Permission.BILLING_READ,
   ],
   [Role.STAFF_AGENT]: [
     Permission.PROFILE_MANAGE,
@@ -97,6 +99,7 @@ export const ROLE_PERMISSIONS: Record<RoleValue, readonly PermissionValue[]> = {
     Permission.CUSTOMER_MANAGE,
     Permission.CUSTOMER_DOCUMENT_VERIFY,
     Permission.CONTRACT_READ,
+    Permission.BILLING_READ,
   ],
   [Role.FINANCE]: [
     Permission.PROFILE_MANAGE,
@@ -104,6 +107,7 @@ export const ROLE_PERMISSIONS: Record<RoleValue, readonly PermissionValue[]> = {
     Permission.PAYMENT_RECORD,
     Permission.PAYMENT_REFUND,
     Permission.PRICING_READ,
+    Permission.BILLING_READ,
     Permission.BILLING_MANAGE,
     Permission.CONTRACT_READ,
     Permission.REPORTS_READ,

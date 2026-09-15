@@ -65,23 +65,10 @@ export interface BookingTotals {
   depositMinor: number;
 }
 
-export function parseBookingTotals(snapshot: unknown): BookingTotals | null {
-  if (snapshot === null || typeof snapshot !== 'object') {
-    return null;
-  }
-  const record = snapshot as Record<string, unknown>;
-  if (typeof record.currency !== 'string' || record.currency.length !== 3) {
-    return null;
-  }
-  if (typeof record.totalMinor !== 'number' || !Number.isInteger(record.totalMinor) || record.totalMinor < 0) {
-    return null;
-  }
-  const rawDeposit = record.depositMinor ?? 0;
-  if (typeof rawDeposit !== 'number' || !Number.isInteger(rawDeposit) || rawDeposit < 0) {
-    return null;
-  }
-  return { currency: record.currency, totalMinor: record.totalMinor, depositMinor: rawDeposit };
-}
+// Canonical snapshot-totals parsing lives in the pricing domain
+// (05-B06) so contracts, payments and billing share one money
+// semantics; re-exported here for the existing call sites.
+export { parseBookingTotals } from '../../pricing/domain/booking-totals';
 
 // ---- integrity -------------------------------------------------------------
 

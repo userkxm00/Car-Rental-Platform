@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PaymentsRepository } from '../infrastructure/payments.repository';
+import { LedgerService } from '../../billing/application/ledger.service';
+import { parseBookingTotals } from '../../pricing/domain/booking-totals';
 import {
   computeIntentStatus,
   isDepositReleasableStatus,
@@ -15,31 +17,7 @@ import type {
 } from '../domain/payment-contract';
 import type { DepositHold, PaymentIntent, PaymentRecord } from '@prisma/client';
 
-/** Strict totals parsing from the immutable booking price snapshot. */
-interface SnapshotTotals {
-  currency: string;
-  totalMinor: number;
-  depositMinor: number;
-}
 
-function parseSnapshotTotals(value: unknown): SnapshotTotals | null {
-  if (value === null || typeof value !== 'object') {
-    return null;
-  }
-  const candidate = value as { currency?: unknown; totalMinor?: unknown; depositMinor?: unknown };
-  if (typeof candidate.currency !== 'string' || candidate.currency.length !== 3) {
-    return null;
-  }
-  const total = candidate.totalMinor;
-  const deposit = candidate.depositMinor === undefined ? 0 : candidate.depositMinor;
-  if (typeof total !== 'number' || !Number.isInteger(total) || total < 0) {
-    return null;
-  }
-  if (typeof deposit !== 'number' || !Number.isInteger(deposit) || deposit < 0) {
-    return null;
-  }
-  return { currency: candidate.currency, totalMinor: total, depositMinor: deposit };
-}
 
 /**
  * PHASE-09 / 09-A use-cases: the booking payment intent (09-A01),
@@ -55,7 +33,10 @@ function parseSnapshotTotals(value: unknown): SnapshotTotals | null {
  */
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly repository: PaymentsRepository) {}
+  constructor(
+    private readonly repository: PaymentsRepository,
+    private readonly ledger: LedgerService,
+  ) {}
 
   // ── intent + summary (09-A01/09-A04/09-A05) ───────────────────────────────
 
@@ -148,6 +129,19 @@ export class PaymentsService {
       });
     }
     const record = await this.repository.findRecord(tenantId, recordId);
+    await this.ledger.append(
+      tenantId,
+      bookingId,
+      {
+        kind: 'PAYMENT_CONFIRMED',
+        currency: intent.currency,
+        amountMinor: record?.amountMinor ?? 0,
+        sourceType: 'PAYMENT_RECORD',
+        sourceId: recordId,
+        description: null,
+      },
+      actorUserId,
+    );
     return this.toRecordResponse(record as PaymentRecord);
   }
 
@@ -172,6 +166,19 @@ export class PaymentsService {
       });
     }
     const voided = await this.repository.voidRecord(recordId);
+    await this.ledger.append(
+      tenantId,
+      bookingId,
+      {
+        kind: 'PAYMENT_VOIDED',
+        currency: intent.currency,
+        amountMinor: 0,
+        sourceType: 'PAYMENT_RECORD',
+        sourceId: recordId,
+        description: 'Pending record voided',
+      },
+      null,
+    );
     return this.toRecordResponse(voided);
   }
 
@@ -215,6 +222,19 @@ export class PaymentsService {
       note,
       new Date(),
     );
+    await this.ledger.append(
+      tenantId,
+      bookingId,
+      {
+        kind: 'DEPOSIT_RELEASED',
+        currency: context.currency,
+        amountMinor: 0,
+        sourceType: 'DEPOSIT_HOLD',
+        sourceId: hold.id,
+        description: note ?? 'Deposit released',
+      },
+      actorUserId,
+    );
     return this.toDepositHoldResponse(released);
   }
 
@@ -243,7 +263,7 @@ export class PaymentsService {
       });
     }
     const snapshot = context.priceSnapshots[0]?.pricingJson;
-    const totals = parseSnapshotTotals(snapshot);
+    const totals = parseBookingTotals(snapshot);
     if (!totals) {
       throw new ConflictException({
         code: PaymentsErrorCode.PAYMENT_PRICING_MISSING,
@@ -258,12 +278,25 @@ export class PaymentsService {
       depositMinor: totals.depositMinor,
     });
     if (totals.depositMinor > 0) {
-      await this.repository.createDepositHold({
+      const hold = await this.repository.createDepositHold({
         tenantId,
         intentId: intent.id,
         bookingId,
         amountMinor: totals.depositMinor,
       });
+      await this.ledger.append(
+        tenantId,
+        bookingId,
+        {
+          kind: 'DEPOSIT_HELD',
+          currency: totals.currency,
+          amountMinor: totals.depositMinor,
+          sourceType: 'DEPOSIT_HOLD',
+          sourceId: hold.id,
+          description: 'Deposit held at payment intent creation',
+        },
+        null,
+      );
     }
     return intent;
   }

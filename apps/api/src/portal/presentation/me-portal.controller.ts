@@ -205,4 +205,22 @@ export class MePortalController {
     const userId = await this.identityResolution.resolve(principal);
     return this.service.bookingPayments(userId, bookingId);
   }
+
+  @Get('bookings/:bookingId/ledger')
+  async bookingLedger(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingLedger']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingLedger(userId, bookingId);
+  }
+
+  @Get('bookings/:bookingId/invoices')
+  async bookingInvoices(
+    @AuthPrincipal() principal: VerifiedPrincipal,
+    @Param('bookingId') bookingId: string,
+  ): Promise<ReturnType<MePortalService['bookingInvoices']>> {
+    const userId = await this.identityResolution.resolve(principal);
+    return this.service.bookingInvoices(userId, bookingId);
+  }
 }

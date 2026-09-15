@@ -88,6 +88,7 @@ interface Mocks {
   findDepositHoldByBooking: jest.Mock;
   releaseDepositHold: jest.Mock;
   confirmedMinorForIntent: jest.Mock;
+  append: jest.Mock;
 }
 
 function buildMocks(): Mocks {
@@ -105,6 +106,7 @@ function buildMocks(): Mocks {
     findDepositHoldByBooking: jest.fn(),
     releaseDepositHold: jest.fn(),
     confirmedMinorForIntent: jest.fn(),
+    append: jest.fn(),
   };
 }
 
@@ -124,7 +126,8 @@ function wireMocks(mocks: Mocks): { service: PaymentsService } {
     releaseDepositHold: mocks.releaseDepositHold,
     confirmedMinorForIntent: mocks.confirmedMinorForIntent,
   } as unknown as PaymentsRepository;
-  return { service: new PaymentsService(repository) };
+  const ledger = { append: mocks.append } as never;
+  return { service: new PaymentsService(repository, ledger) };
 }
 
 describe('PaymentsService (09-A)', () => {
@@ -157,6 +160,17 @@ describe('PaymentsService (09-A)', () => {
       expect(summary.paidMinor).toBe(0);
       expect(summary.outstandingMinor).toBe(45000);
       expect(summary.depositHold?.amountMinor).toBe(10000);
+      expect(mocks.append).toHaveBeenCalledWith(
+        't1',
+        'b1',
+        expect.objectContaining({
+          kind: 'DEPOSIT_HELD',
+          currency: 'DZD',
+          amountMinor: 10000,
+          sourceType: 'DEPOSIT_HOLD',
+        }),
+        null,
+      );
     });
 
     it('skips the deposit hold when the snapshot carries no deposit', async () => {
@@ -176,6 +190,12 @@ describe('PaymentsService (09-A)', () => {
       const summary = await service.getBookingPayments('t1', 'b1');
 
       expect(mocks.createDepositHold).not.toHaveBeenCalled();
+      expect(mocks.append).not.toHaveBeenCalledWith(
+        't1',
+        'b1',
+        expect.objectContaining({ kind: 'DEPOSIT_HELD' }),
+        null,
+      );
       expect(summary.depositHold).toBeNull();
     });
 
@@ -287,6 +307,18 @@ describe('PaymentsService (09-A)', () => {
       expect(mocks.confirmRecordWithinOutstanding).toHaveBeenCalledWith('t1', 'int1', 'rec1', 'u-admin');
       expect(response.status).toBe('CONFIRMED');
       expect(response.confirmedById).toBe('u-admin');
+      expect(mocks.append).toHaveBeenCalledWith(
+        't1',
+        'b1',
+        expect.objectContaining({
+          kind: 'PAYMENT_CONFIRMED',
+          currency: 'DZD',
+          amountMinor: 20000,
+          sourceType: 'PAYMENT_RECORD',
+          sourceId: 'rec1',
+        }),
+        'u-admin',
+      );
     });
 
     it('maps the atomic-gate outcomes to 409/404 errors', async () => {
@@ -319,6 +351,12 @@ describe('PaymentsService (09-A)', () => {
 
       expect(response.status).toBe('VOIDED');
       expect(mocks.voidRecord).toHaveBeenCalledWith('rec1');
+      expect(mocks.append).toHaveBeenCalledWith(
+        't1',
+        'b1',
+        expect.objectContaining({ kind: 'PAYMENT_VOIDED', amountMinor: 0, sourceId: 'rec1' }),
+        null,
+      );
 
       mocks.findRecord.mockResolvedValue(recordRow({ status: 'CONFIRMED' }));
       expect(await codeOf(service.voidRecord('t1', 'b1', 'rec1'))).toBe(
@@ -352,6 +390,17 @@ describe('PaymentsService (09-A)', () => {
       expect(mocks.releaseDepositHold).toHaveBeenCalledWith('hold1', 'u-admin', 'ok', expect.any(Date) as never);
       expect(response.status).toBe('RELEASED');
       expect(response.releasedById).toBe('u-admin');
+      expect(mocks.append).toHaveBeenCalledWith(
+        't1',
+        'b1',
+        expect.objectContaining({
+          kind: 'DEPOSIT_RELEASED',
+          amountMinor: 0,
+          sourceType: 'DEPOSIT_HOLD',
+          sourceId: 'hold1',
+        }),
+        'u-admin',
+      );
     });
 
     it('guards state, eligibility and missing holds', async () => {
