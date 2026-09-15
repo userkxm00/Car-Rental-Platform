@@ -5,19 +5,19 @@ This file is the persistent checkpoint for autonomous implementation.
 ## Status
 
 - Overall: `IN_PROGRESS`
-- Current phase: `PHASE-09` (Payments & Billing) — recon starting
-- Current workstream: `09-A Rental Payments` (payment intent model, cash payment, bank transfer evidence, pay-at-agency state, partial payments, deposit lifecycle, allocation model, manual confirmation workflow)
-- Current task: `09-A01` (payment intent model) — spec/deps analysis before first edit
-- Last completed task: `08-D07` (phase 08 gate) — PHASE-08 closed
-- Last completed phase: `PHASE-08 Contracts & Documents` (08-A requirements · 08-B templates · 08-C contracts/signatures/receipts/PDFs · 08-D secure documents)
+- Current phase: `PHASE-09` (Payments & Billing)
+- Current workstream: `09-C Refunds / Financial Adjustments` — recon starting
+- Current task: `09-C01` (refund model) — spec/deps analysis before first edit
+- Last completed task: `09-B07` (reconciliation view) — 09-B closed
+- Last completed workstream: `09-A Rental Payments` (intent · manual records · deposit lifecycle) + `09-B Financial Ledger / Invoices` (transaction model · invoices · immutable events · reconciliation)
 - Current attempt: `1`
-- Last validation (PHASE-08 gate): contracts e2e 12/12 (JWKS 4172); reproducibility specs (rules + pdf-layout + pdf-renderer) 29/29; full unit 586/586 (49 suites); full e2e 246/246 (30 suites); repo typecheck 0; eslint 0 on all touched files; live smoke `scripts/qa-08c-contracts-smoke.cjs` 38/38 over HTTP; DBs at migration #25 with `document_access_events`/`generated_documents` registered — 2026-09-04
-- Last known good commit: `1b8bd57` (docs(08-D) evidence checkpoint) on `arena/01a05097-car-rental-platform` (pushed to origin)
-- Environment note: three sandbox resets during PHASE-08 — each recovered with the established recipe (`git fetch origin arena/…` + `git reset --mixed FETCH_HEAD` preserves the worktree, `npm install`, `local-pg start`, DB re-create + `migrate deploy`, `npm run db:generate`, config rebuild, dev-jwks + preview API restart). The Prisma CLI cannot reach binaries.prisma.sh from Node's TLS in this sandbox; migrations use the offline generator script + hand-written SQL per scripts/db-migrate-create.cjs — the canonical flow remains documented for networked machines.
-- Known debt: pre-existing eslint errors in 4 unrelated spec files committed at `490f522` (`quotes.service.spec.ts`, `rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts`); not part of the PHASE-08 delta, kept for a dedicated lint sweep
+- Last validation (09-B): billing e2e 12/12 (JWKS 4174); full unit 644/644 (53 suites); full e2e 266/266 (32 suites); repo typecheck 0; eslint 0 on all touched TS files; live smoke `scripts/qa-09b-billing-smoke.cjs` 33/33 over HTTP; DBs at migration #27 with `ledger_transactions`/`invoices`/`invoice_items` registered — 2026-09-15
+- Last known good commit: `32b6fda` (feat(09-B07) reconciliation view) on `arena/01a05097-car-rental-platform` (pushed to origin)
+- Environment note: four sandbox resets so far (latest during 09-B: branch back to `e534d20`, node_modules/PostgreSQL/tokens wiped; origin kept `5161197`) — each recovered with the established recipe (`git fetch origin arena/…` + `git reset --mixed FETCH_HEAD` preserves the worktree, `npm install`, `local-pg start`, DB re-create + `migrate deploy`, `npm run db:generate`, config rebuild, dev-jwks + preview API restart). The Prisma CLI cannot reach binaries.prisma.sh from Node's TLS in this sandbox; migrations use the offline generator script + hand-written SQL per scripts/db-migrate-create.cjs — the canonical flow remains documented for networked machines.
+- Known debt: pre-existing eslint errors in 3 unrelated spec files committed at `490f522` (`rate-plans.service.spec.ts`, `commercial.service.spec.ts`, `bookings.service.spec.ts`); not part of the PHASE-09 delta, kept for a dedicated lint sweep. (`quotes.service.spec.ts` cleaned in `b06d122`.)
 - Blocker: none
-- Next action: PHASE-09 / 09-A recon — read the payments spec (docs/43 payment strategy, WBS 09-A), the existing pricing/quote/booking money boundaries, then implement 09-A01 atomically (schema → domain → repository → service → controller → tests → evidence)
-- Last updated: 2026-09-04
+- Next action: PHASE-09 / 09-C recon — read the refunds/adjustments spec (WBS 09-C, docs/43 payment strategy, docs/06 money rules) and the 09-A intent/record boundaries, then implement 09-C01 atomically (schema → domain → repository → service → controller → tests → evidence)
+- Last updated: 2026-09-15
 
 ## Canonical execution model
 
