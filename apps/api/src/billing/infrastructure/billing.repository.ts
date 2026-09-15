@@ -15,6 +15,7 @@ export interface LedgerRow {
   id: string;
   kind: string;
   description: string | null;
+  currency: string;
   amountMinor: number;
   sourceType: string;
   sourceId: string | null;
@@ -122,6 +123,7 @@ export class BillingRepository {
         id: true,
         kind: true,
         description: true,
+        currency: true,
         amountMinor: true,
         sourceType: true,
         sourceId: true,

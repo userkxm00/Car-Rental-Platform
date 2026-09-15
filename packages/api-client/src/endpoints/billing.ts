@@ -14,6 +14,7 @@ export interface LedgerEntryResponseDto {
   id: string;
   kind: string;
   description: string | null;
+  currency: string;
   amountMinor: number;
   sourceType: string;
   sourceId: string | null;

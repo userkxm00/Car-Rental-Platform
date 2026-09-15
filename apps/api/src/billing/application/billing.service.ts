@@ -19,6 +19,7 @@ export interface LedgerEntryResponse {
   id: string;
   kind: string;
   description: string | null;
+  currency: string;
   amountMinor: number;
   sourceType: string;
   sourceId: string | null;
@@ -204,6 +205,7 @@ export class BillingService {
       id: row.id,
       kind: row.kind,
       description: row.description,
+      currency: row.currency,
       amountMinor: row.amountMinor,
       sourceType: row.sourceType,
       sourceId: row.sourceId,
