@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { findBookingFinanceContext } from '../../shared/finance/booking-finance-context';
-import type { LedgerWrite } from '../domain/billing.rules';
+import { parseBookingTotals } from '../../pricing/domain/booking-totals';
+import type { FinanceSource, LedgerWrite } from '../domain/billing.rules';
 
 export interface BookingFinanceContext {
   bookingNumber: string;
@@ -42,6 +43,12 @@ export type VoidInvoiceResult =
   | { outcome: 'VOIDED'; invoice: InvoiceRow }
   | { outcome: 'NOT_FOUND' }
   | { outcome: 'STATE' };
+
+/** 09-B07: reconciliation source plus the booking identity fields. */
+export interface BookingFinanceSource extends FinanceSource {
+  bookingNumber: string;
+  status: string;
+}
 
 @Injectable()
 export class BillingRepository {
@@ -131,6 +138,66 @@ export class BillingRepository {
       },
     });
     return rows.map((r) => ({ ...r, sourceId: r.sourceId ?? null }));
+  }
+
+  /**
+   * 09-B07: all raw money sources of one booking for the reconciliation
+   * projection — read-only, tenant-scoped; totals parse here (strictly,
+   * from the immutable snapshot) so the domain rule stays pure.
+   */
+  async findFinanceSource(tenantId: string, bookingId: string): Promise<BookingFinanceSource | null> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, tenantId },
+      select: {
+        bookingNumber: true,
+        status: true,
+        currency: true,
+        priceSnapshots: { select: { pricingJson: true }, orderBy: { capturedAt: 'desc' }, take: 1 },
+        paymentIntent: {
+          select: {
+            status: true,
+            totalMinor: true,
+            depositMinor: true,
+            records: { select: { id: true, status: true, amountMinor: true } },
+          },
+        },
+        depositHold: { select: { id: true, status: true, amountMinor: true } },
+        invoices: { select: { id: true, status: true, totalMinor: true } },
+        ledgerTransactions: { select: { kind: true, sourceId: true } },
+      },
+    });
+    if (!booking) {
+      return null;
+    }
+    const totals = parseBookingTotals(booking.priceSnapshots[0]?.pricingJson ?? null);
+    const intent = booking.paymentIntent;
+    return {
+      bookingNumber: booking.bookingNumber,
+      status: booking.status,
+      currency: booking.currency,
+      snapshot: totals ? { totalMinor: totals.totalMinor, depositMinor: totals.depositMinor } : null,
+      intent: intent
+        ? { status: intent.status, totalMinor: intent.totalMinor, depositMinor: intent.depositMinor }
+        : null,
+      records: (intent?.records ?? []).map((record) => ({
+        id: record.id,
+        status: record.status,
+        amountMinor: record.amountMinor,
+      })),
+      hold: booking.depositHold
+        ? {
+            id: booking.depositHold.id,
+            status: booking.depositHold.status,
+            amountMinor: booking.depositHold.amountMinor,
+          }
+        : null,
+      invoices: booking.invoices.map((invoice) => ({
+        id: invoice.id,
+        status: invoice.status,
+        totalMinor: invoice.totalMinor,
+      })),
+      ledger: booking.ledgerTransactions.map((row) => ({ kind: row.kind, sourceId: row.sourceId ?? null })),
+    };
   }
 
   async findInvoices(tenantId: string, bookingId: string): Promise<InvoiceRow[]> {

@@ -16,6 +16,7 @@ function repositoryMock() {
     findBookingFinanceContextForCustomer: jest.fn(),
     findBookingFinanceContextForUser: jest.fn(),
     bookingExistsInTenant: jest.fn(),
+    findFinanceSource: jest.fn(),
     findLedger: jest.fn(),
     findInvoices: jest.fn(),
     issueInvoice: jest.fn(),
@@ -205,4 +206,67 @@ describe('BillingService', () => {
       });
     });
   });
+
+  describe('getBookingFinanceSummary (09-B07)', () => {
+    const coherentSource = () => ({
+      bookingNumber: 'BR-2026-0042',
+      status: 'RETURNED',
+      currency: 'DZD',
+      snapshot: { totalMinor: 45000, depositMinor: 10000 },
+      intent: { status: 'SETTLED', totalMinor: 45000, depositMinor: 10000 },
+      records: [
+        { id: 'r1', status: 'CONFIRMED', amountMinor: 45000 },
+      ],
+      hold: { id: 'h1', status: 'RELEASED', amountMinor: 10000 },
+      invoices: [{ id: 'i1', status: 'ISSUED', totalMinor: 45000 }],
+      ledger: [
+        { kind: 'DEPOSIT_HELD', sourceId: 'h1' },
+        { kind: 'DEPOSIT_RELEASED', sourceId: 'h1' },
+        { kind: 'PAYMENT_CONFIRMED', sourceId: 'r1' },
+        { kind: 'INVOICE_ISSUED', sourceId: 'i1' },
+      ],
+    });
+
+    it('404s for a booking outside the tenant', async () => {
+      repository.findFinanceSource.mockResolvedValue(null);
+      await expect(service.getBookingFinanceSummary('tenant-a', 'bk-x')).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+
+    it('projects the money facts and marks a coherent booking reconciled', async () => {
+      repository.findFinanceSource.mockResolvedValue(coherentSource());
+      const summary = await service.getBookingFinanceSummary('tenant-a', 'bk-1');
+      expect(summary).toMatchObject({
+        bookingId: 'bk-1',
+        bookingNumber: 'BR-2026-0042',
+        bookingStatus: 'RETURNED',
+        currency: 'DZD',
+        snapshot: { totalMinor: 45000, depositMinor: 10000 },
+        intent: { status: 'SETTLED', paidMinor: 45000, outstandingMinor: 0 },
+        depositHold: { status: 'RELEASED', amountMinor: 10000 },
+        records: { confirmed: 1, pending: 0, voided: 0, confirmedTotalMinor: 45000 },
+        invoices: { issued: 1, voided: 0, activeTotalMinor: 45000 },
+        reconciled: true,
+      });
+      expect(summary.checks).toEqual({
+        snapshotPresent: true,
+        intentMatchesRecords: true,
+        intentMatchesSnapshot: true,
+        invoiceMatchesSnapshot: true,
+        eventsComplete: true,
+      });
+    });
+
+    it('surfaces drift as reconciled: false with the failing check named', async () => {
+      const source = coherentSource();
+      source.ledger = source.ledger.filter((row) => row.kind !== 'PAYMENT_CONFIRMED');
+      repository.findFinanceSource.mockResolvedValue(source);
+      const summary = await service.getBookingFinanceSummary('tenant-a', 'bk-1');
+      expect(summary.reconciled).toBe(false);
+      expect(summary.checks.eventsComplete).toBe(false);
+      expect(summary.intent?.paidMinor).toBe(45000);
+    });
+  });
+
 });

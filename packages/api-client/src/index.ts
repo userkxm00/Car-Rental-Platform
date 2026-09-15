@@ -30,6 +30,7 @@ export {
   createBillingApi,
   createMeBillingApi,
   InvoiceItemResponseDto,
+  FinanceSummaryResponseDto,
   InvoiceResponseDto,
   InvoiceStatusDto,
   LedgerEntryResponseDto,

@@ -4,7 +4,11 @@ import { Permission } from '../../authorization/permissions';
 import { AgencyScopeGuard } from '../../authorization/scope/tenant-scope';
 import { RateLimit, RateLimitGuard } from '../../security/rate-limit/rate-limit.guard';
 import { BillingService } from '../application/billing.service';
-import type { InvoiceResponse, LedgerEntryResponse } from '../application/billing.service';
+import type {
+  FinanceSummaryResponse,
+  InvoiceResponse,
+  LedgerEntryResponse,
+} from '../application/billing.service';
 
 /**
  * PHASE-09 / 09-B staff surface: the append-only booking ledger
@@ -36,6 +40,16 @@ export class BillingController {
     @Param('bookingId') bookingId: string,
   ): Promise<InvoiceResponse[]> {
     return this.service.getBookingInvoices(agencyId, bookingId);
+  }
+
+  @Get('bookings/:bookingId/finance')
+  @UseGuards(AgencyScopeGuard, PermissionGuard)
+  @RequirePermission(Permission.BILLING_READ)
+  async bookingFinance(
+    @Param('agencyId') agencyId: string,
+    @Param('bookingId') bookingId: string,
+  ): Promise<FinanceSummaryResponse> {
+    return this.service.getBookingFinanceSummary(agencyId, bookingId);
   }
 
   @Post('bookings/:bookingId/invoices')

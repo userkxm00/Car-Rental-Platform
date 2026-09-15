@@ -49,6 +49,32 @@ interface InvoiceBody {
   items: Array<{ kind: string; description: string; amountMinor: number }>;
 }
 
+interface FinanceBody {
+  bookingId: string;
+  bookingNumber: string;
+  bookingStatus: string;
+  currency: string;
+  snapshot: { totalMinor: number; depositMinor: number } | null;
+  intent: {
+    status: string;
+    totalMinor: number;
+    depositMinor: number;
+    paidMinor: number;
+    outstandingMinor: number;
+  } | null;
+  depositHold: { status: string; amountMinor: number } | null;
+  records: { confirmed: number; pending: number; voided: number; confirmedTotalMinor: number };
+  invoices: { issued: number; voided: number; activeTotalMinor: number | null };
+  checks: {
+    snapshotPresent: boolean;
+    intentMatchesRecords: boolean;
+    intentMatchesSnapshot: boolean;
+    invoiceMatchesSnapshot: boolean;
+    eventsComplete: boolean;
+  };
+  reconciled: boolean;
+}
+
 describe('Billing ledger and invoices (09-B, integration)', () => {
   let jwks: JwksTestServer;
   let app: INestApplication;
@@ -379,4 +405,76 @@ describe('Billing ledger and invoices (09-B, integration)', () => {
     );
     expect(attempt.status).toBe(404);
   });
+
+  it('reconciles the booking finance view end-to-end (09-B07)', async () => {
+    const bearer = await memberToken('bil-owner', agencyId, ['AGENCY_OWNER_ADMIN']);
+    const finance = (
+      await getAs(bearer, `/api/v1/agencies/${agencyId}/bookings/${bookingId}/finance`).expect(200)
+    ).body as FinanceBody;
+
+    expect(finance).toMatchObject({
+      bookingId,
+      bookingNumber,
+      bookingStatus: 'CONFIRMED',
+      currency: 'DZD',
+      snapshot: { totalMinor: 45000, depositMinor: 10000 },
+      intent: {
+        status: 'PARTIALLY_SETTLED',
+        totalMinor: 45000,
+        depositMinor: 10000,
+        paidMinor: 20000,
+        outstandingMinor: 25000,
+      },
+      depositHold: { status: 'HELD', amountMinor: 10000 },
+      records: { confirmed: 1, pending: 0, voided: 0, confirmedTotalMinor: 20000 },
+      invoices: { issued: 1, voided: 2, activeTotalMinor: 45000 },
+      reconciled: true,
+    });
+    expect(finance.checks).toEqual({
+      snapshotPresent: true,
+      intentMatchesRecords: true,
+      intentMatchesSnapshot: true,
+      invoiceMatchesSnapshot: true,
+      eventsComplete: true,
+    });
+
+    // BILLING_READ covers the view; anonymous and cross-tenant stay shut.
+    const staffBearer = await memberToken('bil-staff', agencyId, ['STAFF_AGENT']);
+    await getAs(staffBearer, `/api/v1/agencies/${agencyId}/bookings/${bookingId}/finance`).expect(200);
+    const anonymous = await errorOf(
+      api(app).get(`/api/v1/agencies/${agencyId}/bookings/${bookingId}/finance`),
+    );
+    expect(anonymous.status).toBe(401);
+    const ownerB = await memberToken('bil-other-owner', otherAgencyId, ['AGENCY_OWNER_ADMIN']);
+    const cross = await errorOf(
+      getAs(ownerB, `/api/v1/agencies/${otherAgencyId}/bookings/${bookingId}/finance`),
+    );
+    expect(cross.status).toBe(404);
+    expect(cross.code).toBe('BILLING_BOOKING_NOT_FOUND');
+  });
+
+  it('flags out-of-band money drift as unreconciled (09-B07)', async () => {
+    // Simulate a write that bypasses the 09-A pipeline: a CONFIRMED record
+    // exists with no PAYMENT_CONFIRMED ledger event. The reconciliation
+    // view must name the failing check, never absorb it.
+    const intent = await prisma.paymentIntent.findUniqueOrThrow({ where: { bookingId } });
+    await prisma.paymentRecord.create({
+      data: {
+        tenantId: agencyId,
+        intentId: intent.id,
+        method: 'CASH',
+        amountMinor: 7000,
+        status: 'CONFIRMED',
+      },
+    });
+
+    const bearer = await memberToken('bil-owner', agencyId, ['AGENCY_OWNER_ADMIN']);
+    const finance = (
+      await getAs(bearer, `/api/v1/agencies/${agencyId}/bookings/${bookingId}/finance`).expect(200)
+    ).body as FinanceBody;
+    expect(finance.reconciled).toBe(false);
+    expect(finance.checks.eventsComplete).toBe(false);
+    expect(finance.records).toMatchObject({ confirmed: 2, confirmedTotalMinor: 27000 });
+  });
+
 });

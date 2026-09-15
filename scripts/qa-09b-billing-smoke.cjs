@@ -212,6 +212,37 @@ async function main() {
   const inv3 = await http('POST', invoicesUrl, { token: customerToken });
   assert(inv3.status === 201 && inv3.body.invoiceNumber === `INV-${bookingNumber}-003`, `FINANCE issues next sequence (${inv3.body?.invoiceNumber})`);
 
+  // ---- 09-B07 reconciliation view: coherent money ⇒ reconciled
+  const financeUrl = `/agencies/${tenantA}/bookings/${bookingId}/finance`;
+  let finance = (await http('GET', financeUrl, { token: agencyToken }));
+  assert(finance.status === 200 && finance.body.reconciled === true, `finance view reconciles (${finance.status})`);
+  assert(
+    finance.body.intent?.status === 'PARTIALLY_SETTLED' &&
+      finance.body.intent?.paidMinor === 20000 &&
+      finance.body.intent?.outstandingMinor === 25000 &&
+      finance.body.snapshot?.totalMinor === 45000,
+    'finance view projects intent balance from the snapshot',
+  );
+  assert(
+    finance.body.invoices?.issued === 1 && finance.body.invoices?.voided === 2 && finance.body.invoices?.activeTotalMinor === 45000,
+    'finance view counts invoices (1 active / 2 voided)',
+  );
+  assert(finance.body.checks?.eventsComplete === true, 'finance view: ledger events complete');
+
+  // ---- 09-B07: an out-of-band write is flagged, never absorbed
+  const intentId = (await pg.query(`SELECT id FROM payment_intents WHERE "bookingId" = $1`, [bookingId])).rows[0].id;
+  const tamper = (
+    await pg.query(
+      `INSERT INTO payment_records (id, "tenantId", "intentId", method, "amountMinor", status, "recordedById") VALUES (gen_random_uuid(), $1, $2, 'CASH', 5000, 'CONFIRMED', NULL) RETURNING id`,
+      [tenantA, intentId],
+    )
+  ).rows[0].id;
+  finance = await http('GET', financeUrl, { token: agencyToken });
+  assert(finance.body.reconciled === false && finance.body.checks?.eventsComplete === false, 'out-of-band confirmed record flagged as drift');
+  await pg.query(`DELETE FROM payment_records WHERE id = $1`, [tamper]);
+  finance = await http('GET', financeUrl, { token: agencyToken });
+  assert(finance.body.reconciled === true, 'view reconciles again once the drift is removed');
+
   // ---- me-portal: own-booking mirrors through the customer binding
   const meLedger = await http('GET', `/me/bookings/${bookingId}/ledger`, { token: customerToken });
   assert(meLedger.status === 200 && meLedger.body.length === ledger.length + 1, `me-portal ledger mirrors (${meLedger.status})`);

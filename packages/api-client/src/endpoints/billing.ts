@@ -38,11 +38,40 @@ export interface InvoiceResponseDto {
   items: InvoiceItemResponseDto[];
 }
 
+/** 09-B07 reconciliation view over one booking. */
+export interface FinanceSummaryResponseDto {
+  bookingId: string;
+  bookingNumber: string;
+  bookingStatus: string;
+  currency: string;
+  snapshot: { totalMinor: number; depositMinor: number } | null;
+  intent: {
+    status: string;
+    totalMinor: number;
+    depositMinor: number;
+    paidMinor: number;
+    outstandingMinor: number;
+  } | null;
+  depositHold: { status: string; amountMinor: number } | null;
+  records: { confirmed: number; pending: number; voided: number; confirmedTotalMinor: number };
+  invoices: { issued: number; voided: number; activeTotalMinor: number | null };
+  checks: {
+    snapshotPresent: boolean;
+    intentMatchesRecords: boolean;
+    intentMatchesSnapshot: boolean;
+    invoiceMatchesSnapshot: boolean;
+    eventsComplete: boolean;
+  };
+  reconciled: boolean;
+}
+
 export interface BillingApi {
   /** GET /agencies/:agencyId/bookings/:bookingId/ledger. */
   ledger(agencyId: string, bookingId: string): Promise<LedgerEntryResponseDto[]>;
   /** GET /agencies/:agencyId/bookings/:bookingId/invoices. */
   invoices(agencyId: string, bookingId: string): Promise<InvoiceResponseDto[]>;
+  /** GET /agencies/:agencyId/bookings/:bookingId/finance — staff reconciliation (09-B07). */
+  finance(agencyId: string, bookingId: string): Promise<FinanceSummaryResponseDto>;
   /** POST /agencies/:agencyId/bookings/:bookingId/invoices (201). */
   issue(agencyId: string, bookingId: string): Promise<InvoiceResponseDto>;
   /** POST /agencies/:agencyId/bookings/:bookingId/invoices/:invoiceId/void (201). */
@@ -62,6 +91,7 @@ export function createBillingApi(client: ApiClient): BillingApi {
   return {
     ledger: (agencyId, bookingId) => client.get(`${base(agencyId, bookingId)}/ledger`),
     invoices: (agencyId, bookingId) => client.get(`${base(agencyId, bookingId)}/invoices`),
+    finance: (agencyId, bookingId) => client.get(`${base(agencyId, bookingId)}/finance`),
     issue: (agencyId, bookingId) => client.post(`${base(agencyId, bookingId)}/invoices`),
     void: (agencyId, bookingId, invoiceId) =>
       client.post(`${base(agencyId, bookingId)}/invoices/${invoiceId}/void`),

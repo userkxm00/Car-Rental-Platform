@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { parseBookingTotals } from '../../pricing/domain/booking-totals';
 import { isPaymentEligibleStatus } from '../../payments/domain/payment-rules';
+import { deriveFinanceReconciliation } from '../domain/billing.rules';
 import {
   BillingRepository,
   BookingFinanceContext,
@@ -41,6 +42,33 @@ export interface InvoiceResponse {
   createdAt: string;
   voidedAt: string | null;
   items: InvoiceItemResponse[];
+}
+
+/** 09-B07 reconciliation view over one booking. */
+export interface FinanceSummaryResponse {
+  bookingId: string;
+  bookingNumber: string;
+  bookingStatus: string;
+  currency: string;
+  snapshot: { totalMinor: number; depositMinor: number } | null;
+  intent: {
+    status: string;
+    totalMinor: number;
+    depositMinor: number;
+    paidMinor: number;
+    outstandingMinor: number;
+  } | null;
+  depositHold: { status: string; amountMinor: number } | null;
+  records: { confirmed: number; pending: number; voided: number; confirmedTotalMinor: number };
+  invoices: { issued: number; voided: number; activeTotalMinor: number | null };
+  checks: {
+    snapshotPresent: boolean;
+    intentMatchesRecords: boolean;
+    intentMatchesSnapshot: boolean;
+    invoiceMatchesSnapshot: boolean;
+    eventsComplete: boolean;
+  };
+  reconciled: boolean;
 }
 
 /**
@@ -104,6 +132,63 @@ export class BillingService {
       await this.repository.findBookingFinanceContextForCustomer(userId, bookingId),
     );
     return this.getBookingLedger(context.tenantId, bookingId);
+  }
+
+  // ── 09-B07 reconciliation view ─────────────────────────────────────────────
+
+  /** Staff/finance reconciliation: projections + drift checks, read-only. */
+  async getBookingFinanceSummary(tenantId: string, bookingId: string): Promise<FinanceSummaryResponse> {
+    const source = await this.repository.findFinanceSource(tenantId, bookingId);
+    if (!source) {
+      throw new NotFoundException({
+        code: BillingErrorCode.BILLING_BOOKING_NOT_FOUND,
+        message: 'Booking not found.',
+      });
+    }
+    const reconciliation = deriveFinanceReconciliation(source);
+    const paidMinor = source.records
+      .filter((record) => record.status === 'CONFIRMED')
+      .reduce((sum, record) => sum + record.amountMinor, 0);
+    const count = (status: string) => source.records.filter((record) => record.status === status).length;
+    const activeInvoice = source.invoices.find((invoice) => invoice.status === 'ISSUED') ?? null;
+    return {
+      bookingId,
+      bookingNumber: source.bookingNumber,
+      bookingStatus: source.status,
+      currency: source.currency,
+      snapshot: source.snapshot,
+      intent: source.intent
+        ? {
+            status: source.intent.status,
+            totalMinor: source.intent.totalMinor,
+            depositMinor: source.intent.depositMinor,
+            paidMinor,
+            outstandingMinor: source.intent.totalMinor - paidMinor,
+          }
+        : null,
+      depositHold: source.hold
+        ? { status: source.hold.status, amountMinor: source.hold.amountMinor }
+        : null,
+      records: {
+        confirmed: count('CONFIRMED'),
+        pending: count('PENDING_CONFIRMATION'),
+        voided: count('VOIDED'),
+        confirmedTotalMinor: paidMinor,
+      },
+      invoices: {
+        issued: source.invoices.filter((invoice) => invoice.status === 'ISSUED').length,
+        voided: source.invoices.filter((invoice) => invoice.status === 'VOIDED').length,
+        activeTotalMinor: activeInvoice?.totalMinor ?? null,
+      },
+      checks: {
+        snapshotPresent: reconciliation.snapshotPresent,
+        intentMatchesRecords: reconciliation.intentMatchesRecords,
+        intentMatchesSnapshot: reconciliation.intentMatchesSnapshot,
+        invoiceMatchesSnapshot: reconciliation.invoiceMatchesSnapshot,
+        eventsComplete: reconciliation.eventsComplete,
+      },
+      reconciled: reconciliation.reconciled,
+    };
   }
 
   // ── 09-B02/09-B03 invoice lifecycle ───────────────────────────────────────
