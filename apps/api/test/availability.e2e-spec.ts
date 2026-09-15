@@ -73,8 +73,18 @@ describe('Availability API (integration)', () => {
   let memberships: MembershipService;
   let agencyId: string;
 
-  const START = '2026-09-10T08:00:00Z';
-  const END = '2026-09-10T18:00:00Z';
+  // Wall-clock-independent window: anchor the test day ~1 week out at
+  // 00:00 UTC and express every instant as an offset from it — hold expiry
+  // semantics compare against "now", so a hardcoded date silently rots.
+  const DAY0 = (() => {
+    const d = new Date(Date.now() + 7 * 24 * 3600_000);
+    d.setUTCHours(0, 0, 0, 0);
+    return d;
+  })();
+  const iso = (hours: number) => new Date(DAY0.getTime() + hours * 3600_000).toISOString();
+
+  const START = iso(8);
+  const END = iso(18);
 
   beforeAll(async () => {
     jwks = await startJwksTestServer(JWKS_PORT);
@@ -209,8 +219,8 @@ describe('Availability API (integration)', () => {
         tenantId: agencyId,
         vehicleId,
         blockType: 'MAINTENANCE',
-        startsAt: new Date('2026-09-10T06:00:00Z'),
-        endsAt: new Date('2026-09-10T12:00:00Z'),
+        startsAt: new Date(iso(6)),
+        endsAt: new Date(iso(12)),
       },
     });
     await prisma.vehicleBlock.create({
@@ -218,8 +228,8 @@ describe('Availability API (integration)', () => {
         tenantId: agencyId,
         vehicleId,
         blockType: 'INSPECTION',
-        startsAt: new Date('2026-09-10T12:00:00Z'),
-        endsAt: new Date('2026-09-10T14:00:00Z'),
+        startsAt: new Date(iso(12)),
+        endsAt: new Date(iso(14)),
       },
     });
 
@@ -247,8 +257,8 @@ describe('Availability API (integration)', () => {
       data: {
         tenantId: agencyId,
         vehicleId,
-        startsAt: new Date('2026-09-10T09:00:00Z'),
-        endsAt: new Date('2026-09-10T11:00:00Z'),
+        startsAt: new Date(iso(9)),
+        endsAt: new Date(iso(11)),
         expiresAt: new Date(Date.now() - 60_000), // already expired (relative to now)
         channel: 'STAFF',
       },
@@ -257,9 +267,9 @@ describe('Availability API (integration)', () => {
       data: {
         tenantId: agencyId,
         vehicleId,
-        startsAt: new Date('2026-09-10T12:00:00Z'),
-        endsAt: new Date('2026-09-10T13:00:00Z'),
-        expiresAt: new Date('2026-09-11T00:00:00Z'), // live
+        startsAt: new Date(iso(12)),
+        endsAt: new Date(iso(13)),
+        expiresAt: new Date(iso(24)), // live
         channel: 'MARKETPLACE',
       },
     });
@@ -322,8 +332,8 @@ describe('Availability API (integration)', () => {
         tenantId: agencyId,
         vehicleId: blocked,
         blockType: 'DAMAGE',
-        startsAt: new Date('2026-09-10T00:00:00Z'),
-        endsAt: new Date('2026-09-11T00:00:00Z'),
+        startsAt: new Date(iso(0)),
+        endsAt: new Date(iso(24)),
       },
     });
 
@@ -354,7 +364,7 @@ describe('Availability API (integration)', () => {
       '', // missing params
       `?start=${START}&end=${START}`, // zero length
       `?start=${END}&end=${START}`, // inverted
-      `?start=2026-09-10T08:00:00&end=${END}`, // naive datetime
+      `?start=${iso(8).replace('Z', '')}&end=${END}`, // naive datetime
     ]) {
       const res = await api(app)
         .get(`${base}${query}`)
@@ -417,8 +427,8 @@ describe('Availability API (integration)', () => {
         tenantId: agencyId,
         vehicleId,
         blockType: 'MAINTENANCE',
-        startsAt: new Date('2026-09-10T06:00:00Z'),
-        endsAt: new Date('2026-09-10T12:00:00Z'),
+        startsAt: new Date(iso(6)),
+        endsAt: new Date(iso(12)),
         reason: 'scheduled service',
       },
     });
@@ -426,9 +436,9 @@ describe('Availability API (integration)', () => {
       data: {
         tenantId: agencyId,
         vehicleId,
-        startsAt: new Date('2026-09-10T10:00:00Z'),
-        endsAt: new Date('2026-09-10T14:00:00Z'),
-        expiresAt: new Date('2026-09-11T00:00:00Z'), // live
+        startsAt: new Date(iso(10)),
+        endsAt: new Date(iso(14)),
+        expiresAt: new Date(iso(24)), // live
         channel: 'MARKETPLACE',
       },
     });
@@ -482,8 +492,8 @@ describe('Availability API (integration)', () => {
         tenantId: agencyId,
         vehicleId: v1,
         blockType: 'DAMAGE',
-        startsAt: new Date('2026-09-10T00:00:00Z'),
-        endsAt: new Date('2026-09-11T00:00:00Z'),
+        startsAt: new Date(iso(0)),
+        endsAt: new Date(iso(24)),
       },
     });
 
@@ -512,7 +522,7 @@ describe('Availability API (integration)', () => {
 
     await api(app).get(`${base}?start=${START}&end=${END}`).expect(401);
 
-    for (const query of ['', `?start=${END}&end=${START}`, `?start=2026-09-10T08:00:00&end=${END}`]) {
+    for (const query of ['', `?start=${END}&end=${START}`, `?start=${iso(8).replace('Z', '')}&end=${END}`]) {
       const res = await api(app)
         .get(`${base}${query}`)
         .set('Authorization', `Bearer ${auth}`)

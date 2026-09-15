@@ -38,7 +38,7 @@ function makeQuotesRepository(): QuotesRepository & { rows: QuoteRecordRow[] } {
   const rows: QuoteRecordRow[] = [];
   return {
     rows,
-    create: jest.fn(async (input) => {
+    create: jest.fn((input: Parameters<QuotesRepository['create']>[0]) => {
       const row: QuoteRecordRow = {
         id: 'q1',
         tenantId: input.tenantId,
@@ -58,10 +58,10 @@ function makeQuotesRepository(): QuotesRepository & { rows: QuoteRecordRow[] } {
         createdAt: new Date(),
       };
       rows.push(row);
-      return row;
+      return Promise.resolve(row);
     }),
-    findInTenant: jest.fn(
-      async (tenantId, quoteId) => rows.find((r) => r.tenantId === tenantId && r.id === quoteId) ?? null,
+    findInTenant: jest.fn((tenantId: string, quoteId: string) =>
+      Promise.resolve(rows.find((r) => r.tenantId === tenantId && r.id === quoteId) ?? null),
     ),
   } as unknown as QuotesRepository & { rows: QuoteRecordRow[] };
 }
@@ -73,7 +73,9 @@ function makeService(options: {
 } = {}) {
   const availability = new AvailabilityService(makeAvailabilityRepository(options.availabilityRepository));
   const locationContext = {
-    resolve: jest.fn(async (_tenantId: string, input: Record<string, string | undefined>) => ({ ...input })),
+    resolve: jest.fn((_tenantId: string, input: Record<string, string | undefined>) =>
+      Promise.resolve({ ...input }),
+    ),
   } as unknown as LocationContextService;
   const env = loadEnvSchema({
     NODE_ENV: 'test',
@@ -105,9 +107,14 @@ const vehicleRequest = () => ({
 describe('QuotesService.validateRequest (05-A01/A02)', () => {
   it('validates a vehicle request with the default channel and normalized instants', () => {
     const { service } = makeService();
+    // Compute the fixture from the wall clock (whole seconds, ~1 week out)
+    // so the "start must be in the future" gate never flips over time; the
+    // start is then re-expressed in +01:00 wall time — the same instant —
+    // to prove offset normalization into UTC.
+    const startMs = Math.floor(Date.now() / 1000) * 1000 + 7 * 24 * 3600_000;
     const input = vehicleRequest();
-    input.start = '2026-09-10T09:00:00+01:00';
-    input.end = '2026-09-10T18:00:00Z';
+    input.start = new Date(startMs + 3600_000).toISOString().replace('Z', '+01:00');
+    input.end = new Date(startMs + 9 * 3600_000).toISOString();
 
     const request = service.validateRequest(input);
 
@@ -120,7 +127,7 @@ describe('QuotesService.validateRequest (05-A01/A02)', () => {
       returnBranchId: null,
       deliveryZoneId: null,
     });
-    expect(request.start.toISOString()).toBe('2026-09-10T08:00:00.000Z');
+    expect(request.start.toISOString()).toBe(new Date(startMs).toISOString());
   });
 
   it('rejects missing, inverted and zone-less intervals', () => {
@@ -235,15 +242,14 @@ describe('QuotesService.createQuote (05-A03/A04/A05)', () => {
   });
 
   it('fills the pricing slot through the port when a provider is registered (05-A04)', async () => {
-    const pricing: QuotePricingPort = {
-      computeQuotePricing: jest.fn().mockResolvedValue({
-        currency: 'DZD',
-        totalMinor: 120000,
-        breakdown: [{ code: 'BASE_RATE', amountMinor: 120000 }],
-        depositMinor: null,
-        calculatedAt: '2026-09-01T00:00:00.000Z',
-      }),
-    };
+    const computeQuotePricing = jest.fn().mockResolvedValue({
+      currency: 'DZD',
+      totalMinor: 120000,
+      breakdown: [{ code: 'BASE_RATE', amountMinor: 120000 }],
+      depositMinor: null,
+      calculatedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const pricing: QuotePricingPort = { computeQuotePricing };
     const { service } = makeService({
       pricing,
       availabilityRepository: {
@@ -259,7 +265,7 @@ describe('QuotesService.createQuote (05-A03/A04/A05)', () => {
     // 05-A04: vehicle-mode quotes carry the resolved category so
     // category-scoped rate plans match even when the request names only
     // the vehicle.
-    expect(pricing.computeQuotePricing).toHaveBeenCalledWith(
+    expect(computeQuotePricing).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'ag1', mode: 'VEHICLE', categoryId: 'cat-1' }),
     );
   });
